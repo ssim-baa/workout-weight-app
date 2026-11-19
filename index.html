@@ -491,7 +491,7 @@
 
 
 <script>
-    const APP_VERSION = '11.0';
+    const APP_VERSION = '11.1';
     // ================= Default Data (V10) =================
     const defaultPrograms = {
         dayA: {
@@ -939,7 +939,7 @@
     function num(x) { const n = parseFloat(x); return isNaN(n) ? 0 : n; }
     function suffixOf(loadType) { return loadType === 'each' ? 'e' : loadType === 'single' ? 't' : 'BW'; }
     function planWeightToken(ex) {
-        if (ex.type === 'time' || ex.load_type === 'bodyweight') return 'BW';
+        if (ex.load_type === 'bodyweight' || !num(ex.weight)) return 'BW';
         return `${num(ex.weight)}${suffixOf(ex.load_type)}`;
     }
     function todayISO() {
@@ -1120,7 +1120,8 @@
     function buildSessionLog() {
         sessionLog = currentRoutine.map(ex => {
             if (ex.type === 'time') {
-                return { name: ex.name, load_type: ex.load_type, type: 'time', reps_label: ex.reps, setCount: ex.sets, note: '' };
+                // weight is kept so a loaded time exercise (e.g. thruster 4.5e) exports its real load, not BW
+                return { name: ex.name, load_type: ex.load_type, weight: num(ex.weight), type: 'time', reps_label: ex.reps, setCount: ex.sets, note: '' };
             }
             const plan = { weight: num(ex.weight), reps: num(ex.reps) };
             return {
@@ -1407,7 +1408,7 @@
         sessionLog.forEach((rec, ei) => {
             const span = document.getElementById(`revtok-${ei}`);
             if (!span) return;
-            if (rec.type === 'time') { span.innerText = `BW · ${rec.reps_label}`; return; }
+            if (rec.type === 'time') { span.innerText = `${planWeightToken(rec)} · ${rec.reps_label}`; return; }
             const w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight));
             const r = fmtRepsTokens(rec.sets.map(s => s.reps));
             span.innerText = `${w} · ${r}`;
@@ -1435,7 +1436,7 @@
         (log.sessionLog || []).forEach(rec => {
             let w, r, setCount, cellNote = (rec.note || '').replace(/\|/g, '/');
             if (rec.type === 'time') {
-                w = 'BW'; r = rec.reps_label; setCount = rec.setCount;
+                w = planWeightToken(rec); r = rec.reps_label; setCount = rec.setCount;
             } else {
                 w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight));
                 r = fmtRepsTokens(rec.sets.map(s => s.reps));
@@ -1517,7 +1518,7 @@
                 let details = "";
                 (log.sessionLog || []).forEach(rec => {
                     let w, r;
-                    if (rec.type === 'time') { w = 'BW'; r = rec.reps_label; }
+                    if (rec.type === 'time') { w = planWeightToken(rec); r = rec.reps_label; }
                     else { w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight)); r = fmtRepsTokens(rec.sets.map(s => s.reps)); }
                     details += `• ${rec.name}: ${w} / ${r}<br>`;
                 });

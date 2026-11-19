@@ -1,6 +1,6 @@
 // Offline cache for the app shell only. GitHub API and YouTube requests are never touched.
 // Bump CACHE when shipping a new version; the page also refreshes itself in the background.
-const CACHE = 'workout-v11.0';
+const CACHE = 'workout-v11.1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

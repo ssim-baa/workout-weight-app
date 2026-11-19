@@ -54,7 +54,7 @@
             border-bottom: 1px solid var(--border-color);
         }
 
-        .brand { font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; gap: 10px; color: var(--text-primary); }
+        .brand { font-size: 1.4rem; font-weight: 800; display: flex; white-space: nowrap; align-items: center; gap: 10px; color: var(--text-primary); }
         .total-time-badge {
             background: #2C2C2E; padding: 6px 12px; border-radius: 12px;
             font-variant-numeric: tabular-nums; font-weight: 600; color: var(--work); font-size: 0.9rem;
@@ -194,6 +194,11 @@
         .sync-badge.ok { color: var(--work); }
         .sync-badge.wait { color: var(--rest); }
         .sync-badge.err { color: var(--danger); }
+        .sync-badge.update { color: black; background: var(--work); border-color: var(--work); }
+        .sync-badge.proposal { color: black; background: var(--rest); border-color: var(--rest); }
+        .proposal-box { background: rgba(255,159,10,0.10); border: 1px solid var(--rest); border-radius: 12px; padding: 12px; margin-bottom: 16px; font-size: 0.85rem; line-height: 1.6; }
+        .proposal-box pre { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.8rem; margin: 8px 0; }
+        details.adv summary { list-style: none; }
         .sync-box { background: #222; border: 1px solid #333; border-radius: 12px; padding: 12px; margin-bottom: 16px; font-size: 0.85rem; line-height: 1.6; }
         .sync-status { color: var(--text-secondary); font-size: 0.8rem; white-space: pre-wrap; }
         .rh-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #333; padding: 4px 0; }
@@ -268,17 +273,18 @@
         .tag-toggles { display:flex; gap:10px; }
         .tag-btn { flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:#2C2C2E; color:#ccc; font-weight:700; font-size:0.9rem; }
         .tag-btn.on { border-color:var(--danger); color:var(--danger); background:rgba(255,69,58,0.12); }
-        #exportPreview { height:180px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:0.8rem; line-height:1.5; white-space:pre; }
     </style>
 </head>
 <body>
 
 <header>
     <div class="brand">
-        <span>💪</span> Fitness Logger
+        <span>💪</span> Workout
         <div class="total-time-badge" id="totalTime">00:00</div>
     </div>
     <div class="header-controls">
+        <button class="sync-badge update" id="updateBtn" style="display:none;" onclick="applyAppUpdate()">새 버전 적용</button>
+        <button class="sync-badge proposal" id="proposalBadge" style="display:none;" onclick="openSettings()">루틴 제안</button>
         <span class="sync-badge" id="syncBadge" onclick="openSettings()" title="동기화 상태"></span>
         <button class="btn-icon" onclick="openHistory()" title="History Log">📅</button>
         <select id="programSelect" class="modern-select"></select>
@@ -359,14 +365,15 @@
 <div id="settingsModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <button class="btn-sub" style="width:auto; padding:0 15px;" onclick="resetToDefaults()">Reset Defaults</button>
-            <span style="font-weight:700;">Edit Routine</span>
+            <span class="sync-status" id="appVersionLabel" style="min-width:90px;"></span>
+            <span style="font-weight:700;">루틴 편집</span>
             <div style="display:flex; gap:8px; align-items:center;">
                 <button class="btn-main" style="flex:0; width:auto; padding:0 20px; font-size:1rem; color:black;" onclick="closeSettings()">Save</button>
                 <button class="btn-icon" style="background:#3A3A3C;" onclick="cancelSettings()" title="저장하지 않고 닫기">✕</button>
             </div>
         </div>
         <div class="modal-body">
+            <div id="proposalArea"></div>
             <div style="margin-bottom: 18px;">
                 <div class="editor-row">
                     <select id="editProgramSelect" onchange="loadEditor(this.value)"></select>
@@ -391,23 +398,9 @@
             <div id="exerciseListArea"></div>
             <button class="btn-sub" style="width:100%; padding:15px; margin-bottom:20px;" onclick="addExercise()">+ Add Exercise</button>
 
-            <div class="section-label">루틴 반영 (JSON)</div>
-            <div class="editor-row">
-                <button class="btn-sub" style="flex:1;" onclick="exportRoutine()">📤 현재 루틴 복사</button>
-                <button class="btn-sub" style="flex:1;" onclick="importRoutine()">📥 붙여넣기로 반영</button>
-            </div>
-
-            <div class="section-label">데이터 이전 · 백업</div>
-            <div class="editor-row">
-                <button class="btn-sub" style="flex:1;" onclick="importV9Storage()">⤵️ v9 데이터 가져오기</button>
-            </div>
-            <div class="editor-row">
-                <button class="btn-sub" style="flex:1;" onclick="backupAll()">📦 전체 백업 복사</button>
-                <button class="btn-sub" style="flex:1;" onclick="restoreAll()">♻️ 백업 복원</button>
-            </div>
-
             <div class="section-label">루틴 변경 이력</div>
             <div id="routineHistoryArea" class="sync-box"></div>
+            <pre id="routineHistoryOut" class="sync-box" style="display:none; white-space:pre-wrap; font-family: ui-monospace, monospace; font-size:0.8rem;"></pre>
 
             <div class="section-label">GitHub 동기화</div>
             <div class="sync-box">
@@ -421,13 +414,22 @@
                     <button class="btn-sub" style="flex:1;" onclick="saveSyncConfig()">💾 설정 저장 · 연결 확인</button>
                     <button class="btn-sub" style="flex:1;" onclick="flushQueue(true)">⬆️ 지금 보내기</button>
                 </div>
-                <div class="editor-row">
-                    <button class="btn-sub" style="flex:1;" onclick="enqueueEverything()">📚 전체 기록·루틴 올리기 (최초 1회)</button>
-                </div>
                 <div id="syncStatusText" class="sync-status"></div>
             </div>
 
-            <textarea id="routineIO" placeholder="루틴/백업 JSON을 여기에 붙여넣고 위 버튼을 누르세요.&#10;· 루틴 하나만: '붙여넣기로 반영'&#10;· 전체(루틴+기록): '백업 복원'&#10;· v9 파일과 저장소가 분리된 경우: v9에서 백업 복사 → 여기에 붙여넣기 → 백업 복원" style="height:110px; font-family: ui-monospace, monospace; font-size:0.8rem; margin-bottom:40px;"></textarea>
+            <details class="adv" style="margin-bottom:40px;">
+                <summary class="section-label" style="cursor:pointer;">고급 (복구와 예비 수단)</summary>
+                <div class="editor-row">
+                    <button class="btn-sub" style="flex:1;" onclick="restoreFromRepo()">☁️ 저장소에서 복원</button>
+                    <button class="btn-sub" style="flex:1;" onclick="enqueueEverything()">📚 전체 기록·루틴 다시 올리기</button>
+                </div>
+                <div class="editor-row">
+                    <button class="btn-sub" style="flex:1;" onclick="backupAll()">📦 전체 백업 복사</button>
+                    <button class="btn-sub" style="flex:1;" onclick="restoreAll()">♻️ 붙여넣은 백업으로 복원</button>
+                    <button class="btn-sub" style="flex:1;" onclick="importRoutine()">📥 붙여넣은 루틴 추가</button>
+                </div>
+                <textarea id="routineIO" placeholder="백업 JSON이나 루틴 JSON을 붙여넣고 위 버튼을 누르세요. 평소에는 쓰지 않습니다. 루틴 변경은 Claude가 보낸 제안을 위쪽 알림에서 적용하세요." style="height:110px; font-family: ui-monospace, monospace; font-size:0.8rem;"></textarea>
+            </details>
         </div>
     </div>
 </div>
@@ -436,7 +438,7 @@
 <div id="historyModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <button class="btn-sub" style="width:auto; padding:0 15px; background:var(--danger);" onclick="clearHistory()">Clear All</button>
+            <span style="min-width:60px;"></span>
             <span style="font-weight:700;">Workout Log</span>
             <button class="btn-sub" style="width:auto; padding:0 15px;" onclick="closeHistory()">Close</button>
         </div>
@@ -448,8 +450,8 @@
 <div id="reviewModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <span style="font-weight:700;">세션 리뷰 · P1 디브리핑</span>
-            <button class="btn-sub" style="width:auto; padding:0 15px;" onclick="closeReview()">Close</button>
+            <span style="font-weight:700;">세션 리뷰</span>
+            <button class="btn-main" style="flex:0 0 auto; width:auto; height:44px; white-space:nowrap; padding:0 20px; font-size:1rem; color:black;" onclick="closeReview()">저장하고 닫기</button>
         </div>
         <div class="modal-body">
             <div class="meta-grid">
@@ -482,16 +484,14 @@
                 <textarea id="revSessionNote" onchange="rebuildExport()" style="height:60px;" placeholder="전체 컨디션·특이사항"></textarea>
             </div>
 
-            <div class="section-label" style="margin-top:16px;">P1 붙여넣기용 출력</div>
-            <textarea id="exportPreview" readonly></textarea>
-            <button class="btn-main" style="width:100%; height:52px; margin-top:12px;" onclick="copyExport()">📋 Copy for P1 Debriefing</button>
+            <div class="sync-status" style="margin-top:12px;">저장하면 기기에 기록되고 데이터 저장소로 자동 전송됩니다. Notion 적재는 PC에서 「웨이트 적재」로 합니다.</div>
         </div>
     </div>
 </div>
 
 
 <script>
-    const APP_VERSION = '11.1';
+    const APP_VERSION = '11.2';
     // ================= Default Data (V10) =================
     const defaultPrograms = {
         dayA: {
@@ -518,6 +518,7 @@
 
     let programs = {};
     let bootedFromDefaults = false;
+    let sessionProgram = null; // routine snapshot taken at START (id, routine_key, title, rev, plan)
     let currentRoutine = [];
     let pIndex = 0;
     let viewIndex = 0;
@@ -573,10 +574,12 @@
         if ('serviceWorker' in navigator && location.protocol === 'https:') {
             navigator.serviceWorker.register('sw.js').catch(() => {});
         }
-        setTimeout(() => flushQueue(false), 1500);
+        setTimeout(() => { flushQueue(false); checkProposals(false); checkAppUpdate(); }, 1500);
     };
-    window.addEventListener('online', () => flushQueue(false));
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushQueue(false); });
+    window.addEventListener('online', () => { flushQueue(false); checkProposals(false); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') { flushQueue(false); checkProposals(false); checkAppUpdate(); }
+    });
 
     // ================= v11: routine history + GitHub sync =================
     // Storage keys. Program/log keys stay v10 so a v10 backup restores as-is.
@@ -586,7 +589,8 @@
         rhist: 'workout_routine_history_v11',
         queue: 'workout_sync_queue_v11',
         cfg: 'workout_sync_cfg_v11',
-        sync: 'workout_sync_state_v11'
+        sync: 'workout_sync_state_v11',
+        pdone: 'workout_proposals_done_v11'
     };
     function readJSON(key, fallback) {
         try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
@@ -685,35 +689,197 @@
             row.className = 'rh-row';
             const when = new Date(e.saved_at).toLocaleString('ko-KR');
             row.innerHTML = `
-                <span>${e.routine_key}${e.deleted ? ' (삭제)' : ''} <span class="rh-rev">${e.rev}</span><br><span class="sync-status">${when} · ${e.reason}</span></span>
+                <span>${esc(e.routine_key)}${e.deleted ? ' (삭제)' : ''} <span class="rh-rev">${esc(e.rev)}</span><br><span class="sync-status">${esc(when)} · ${esc(e.reason)}</span></span>
                 <span style="display:flex; gap:6px; align-items:center;">
                     <button class="btn-sub" style="height:34px; padding:0 10px;" onclick="showRoutineDiff(${i})">비교</button>
-                    <button class="btn-sub" style="height:34px; padding:0 10px;" onclick="showRoutineVersion(${i})">보기</button>
+                    ${e.deleted ? '' : `<button class="btn-sub" style="height:34px; padding:0 10px;" onclick="revertToVersion(${i})">되돌리기</button>`}
                 </span>`;
             area.appendChild(row);
         });
     }
-    window.showRoutineVersion = function(i) {
-        const e = loadRoutineHistory()[i];
-        if (!e) return;
-        document.getElementById('routineIO').value = JSON.stringify(e.program, null, 2);
-        alert(`${e.routine_key} ${e.rev} 판을 아래 칸에 넣었습니다.\n이 판으로 되돌리려면 '붙여넣기로 반영'을 누르세요(새 루틴으로 추가됩니다).`);
-    };
+    function showHistoryOut(text) {
+        const out = document.getElementById('routineHistoryOut');
+        out.textContent = text;
+        out.style.display = 'block';
+    }
     window.showRoutineDiff = function(i) {
         const hist = loadRoutineHistory();
         const e = hist[i];
         if (!e) return;
         let prev = null;
-        for (let j = i - 1; j >= 0; j--) if (hist[j].program_id === e.program_id) { prev = hist[j]; break; }
+        for (let j = i - 1; j >= 0; j--) if (hist[j].routine_key === e.routine_key) { prev = hist[j]; break; }
         const head = prev ? `${e.routine_key}: ${prev.rev} → ${e.rev}` : `${e.routine_key}: 첫 기록 ${e.rev}`;
-        document.getElementById('routineIO').value = `${head}\n${diffPrograms(prev ? prev.program : null, e.deleted ? null : e.program)}`;
+        showHistoryOut(`${head}\n${diffPrograms(prev ? prev.program : null, e.deleted ? null : e.program)}`);
+    };
+    // HTML-escape anything that came from storage or the repo before it goes into innerHTML.
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+    // If several routines share a key (possible after a paste-import), prefer the one on screen.
+    function programIdForKey(key) {
+        const ids = Object.keys(programs).filter(id => programs[id].routine_key === key);
+        if (!ids.length) return null;
+        const editSel = document.getElementById('editProgramSelect').value;
+        if (ids.includes(els.progSelect.value)) return els.progSelect.value;
+        if (ids.includes(editSel)) return editSel;
+        return ids[0];
+    }
+    function afterRoutineChange(reason) {
+        saveData();
+        recordRoutineVersions(reason);
+        flushQueue(false);
+        if (workoutIdle()) loadMainProgram();
+        if (document.getElementById('settingsModal').classList.contains('open')) {
+            renderRoutineHistory();
+            loadEditor(document.getElementById('editProgramSelect').value);
+        }
+    }
+    window.revertToVersion = function(i) {
+        const e = loadRoutineHistory()[i];
+        if (!e || e.deleted) return;
+        if (!confirm(`${e.routine_key}을(를) ${e.rev} 판으로 되돌릴까요? 편집 중인 다른 변경도 함께 저장됩니다.`)) return;
+        const id = programs[e.program_id] ? e.program_id : (programIdForKey(e.routine_key) || e.program_id);
+        programs[id] = JSON.parse(JSON.stringify(e.program));
+        afterRoutineChange('revert');
+    };
+
+    // ---- Routine proposals: Claude writes proposals/<key>.json to the data repo; the user applies or rejects here ----
+    let pendingProposals = [];
+    function doneProposals() { return readJSON(LS.pdone, []); }
+    let checkingProposals = false;
+    async function checkProposals(manual) {
+        const c = loadCfg();
+        if (!cfgReady(c) || !navigator.onLine) return;
+        if (checkingProposals) return;
+        checkingProposals = true;
+        const branch = encodeURIComponent(c.branch || 'main');
+        try {
+            const r = await ghFetch(c, 'GET', `${contentsUrl(c, 'proposals')}?ref=${branch}`);
+            if (r.status === 404) { pendingProposals = []; renderProposals(); return; }
+            if (r.status !== 200) throw new Error(`proposals → ${r.status}`);
+            const listing = await r.json();
+            if (!Array.isArray(listing)) throw new Error('proposals가 폴더가 아님');
+            const files = listing.filter(f => f.type === 'file' && f.name.endsWith('.json') && !doneProposals().includes(f.sha));
+            const out = [];
+            for (const f of files) {
+                const fr = await ghFetch(c, 'GET', `${contentsUrl(c, f.path)}?ref=${branch}`, null, true);
+                if (fr.status !== 200) continue;
+                let data = null;
+                try { data = JSON.parse(await fr.text()); } catch (e) { data = { _parseError: true }; }
+                out.push({ path: f.path, sha: f.sha, data });
+            }
+            // A decision may have been made while this check was in flight; never resurrect it.
+            const done = new Set(doneProposals());
+            pendingProposals = out.filter(p => !done.has(p.sha));
+            renderProposals();
+        } catch (e) {
+            if (manual) alert('루틴 제안 확인 실패: ' + (e.message || e));
+        } finally {
+            checkingProposals = false;
+        }
+    }
+    function renderProposals() {
+        document.getElementById('proposalBadge').style.display = pendingProposals.length ? 'inline-block' : 'none';
+        document.getElementById('proposalBadge').innerText = `루틴 제안 ${pendingProposals.length}`;
+        const area = document.getElementById('proposalArea');
+        area.innerHTML = '';
+        pendingProposals.forEach((p, i) => {
+            const d = p.data || {};
+            const valid = proposalValid(d);
+            const key = d.routine_key || '?';
+            const id = valid ? programIdForKey(key) : null;
+            const curRev = id ? revOf(programs[id]) : null;
+            const stale = d.base_rev && curRev && d.base_rev !== curRev;
+            const box = document.createElement('div');
+            box.className = 'proposal-box';
+            box.innerHTML = `
+                <b>루틴 제안: ${esc(key)}</b> <span class="sync-status">${d.created_at ? esc(new Date(d.created_at).toLocaleString('ko-KR')) : ''}</span>
+                ${d.note ? `<div>${esc(d.note)}</div>` : ''}
+                ${stale ? `<div style="color:var(--danger);">주의: 제안은 ${esc(d.base_rev)} 판 기준인데 지금 루틴은 ${esc(curRev)} 판입니다. 그 사이 앱에서 바꾼 내용이 덮어써집니다.</div>` : ''}
+                ${valid && !id ? '<div>지금 앱에 없는 루틴이라 새로 추가됩니다.</div>' : ''}
+                <pre></pre>
+                <div class="editor-row" style="margin-bottom:0;">
+                    ${valid ? `<button class="btn-main" style="flex:1; height:44px; font-size:1rem; color:black;" onclick="applyProposal(${i})">적용</button>` : ''}
+                    <button class="btn-sub" style="flex:1; height:44px;" onclick="rejectProposal(${i})">거절</button>
+                </div>`;
+            let diffText;
+            try { diffText = valid ? diffPrograms(id ? planOf(programs[id], true) : null, d.program) : '형식 오류: 적용할 수 없는 제안입니다. 거절해 지우세요.'; }
+            catch (e) { diffText = '비교 실패: ' + (e.message || e); }
+            box.querySelector('pre').textContent = diffText;
+            area.appendChild(box);
+        });
+    }
+    function proposalValid(d) {
+        return !!(d && !d._parseError && typeof d.routine_key === 'string' && d.routine_key &&
+            d.program && Array.isArray(d.program.list) && d.program.list.length &&
+            d.program.list.every(x => x && typeof x.name === 'string' && x.name));
+    }
+    // The decision is recorded locally first (so the card never comes back), then the file delete
+    // goes through the outbox like any upload: retried until it succeeds, visible in the sync badge.
+    async function closeProposal(p, how) {
+        writeJSON(LS.pdone, doneProposals().concat([p.sha]).slice(-50));
+        pendingProposals = pendingProposals.filter(x => x !== p);
+        renderProposals();
+        const q = loadQueue().filter(it => it.path !== p.path);
+        q.push({ id: newQid(), op: 'delete', path: p.path, sha: p.sha, content: '', message: `proposal ${how}: ${p.path}` });
+        writeJSON(LS.queue, q);
+        updateSyncBadge();
+        await flushQueue(false);
+    }
+    window.applyProposal = async function(i) {
+        const p = pendingProposals[i];
+        const d = p && p.data;
+        if (!proposalValid(d)) return alert('제안 형식이 올바르지 않습니다.');
+        if (!confirm(`${d.routine_key} 루틴을 이 제안으로 바꿀까요? 지금 판은 이력에 남습니다. 루틴 편집 화면에서 저장하지 않은 변경이 있으면 함께 저장됩니다.`)) return;
+        const id = programIdForKey(d.routine_key) || ('prog_' + Date.now());
+        programs[id] = { title: d.program.title || (programs[id] && programs[id].title) || d.routine_key, routine_key: d.routine_key, list: d.program.list.map(normalizeImportedEx) };
+        afterRoutineChange('proposal');
+        await closeProposal(p, 'applied');
+        alert(`${d.routine_key} 루틴을 바꿨습니다.`);
+    };
+    window.rejectProposal = async function(i) {
+        const p = pendingProposals[i];
+        if (!p || !confirm('이 제안을 거절하고 지울까요?')) return;
+        await closeProposal(p, 'rejected');
+    };
+
+    // ---- App version: version.json is fetched fresh (the service worker never caches it) ----
+    // "11.10" > "11.9"; a lagging CDN copy with an older number never triggers the button.
+    function versionNewer(a, b) {
+        const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+            const x = pa[i] || 0, y = pb[i] || 0;
+            if (x !== y) return x > y;
+        }
+        return false;
+    }
+    async function checkAppUpdate() {
+        if (location.protocol !== 'https:') return;
+        try {
+            const r = await fetch('version.json?ts=' + Date.now(), { cache: 'no-store' });
+            const v = (await r.json()).version;
+            const btn = document.getElementById('updateBtn');
+            if (v && versionNewer(v, APP_VERSION)) { btn.innerText = `새 버전 ${v} 적용`; btn.style.display = 'inline-block'; }
+            else btn.style.display = 'none';
+        } catch (e) {}
+    }
+    window.applyAppUpdate = async function() {
+        if (state === 'WORK' || state === 'REST') return alert('운동이 끝난 뒤에 적용하세요.');
+        try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.update()));
+        } catch (e) {}
+        location.reload();
     };
 
     // ---- Outbox queue (survives reloads; flushed when online) ----
     function loadQueue() { return readJSON(LS.queue, []); }
+    function newQid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
     function enqueue(path, obj, message, overwrite) {
         const q = loadQueue().filter(it => it.path !== path);
-        q.push({ path, content: JSON.stringify(obj, null, 2), message, overwrite: !!overwrite });
+        q.push({ id: newQid(), path, content: JSON.stringify(obj, null, 2), message, overwrite: !!overwrite });
         writeJSON(LS.queue, q);
         updateSyncBadge();
     }
@@ -749,8 +915,9 @@
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
         return btoa(bin);
     }
-    function ghFetch(c, method, url, body) {
-        const headers = { 'Authorization': `Bearer ${c.token}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+    // raw=true returns the file body itself (works past the 1MB JSON-content limit).
+    function ghFetch(c, method, url, body, raw) {
+        const headers = { 'Authorization': `Bearer ${c.token}`, 'Accept': raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
         if (body) headers['Content-Type'] = 'application/json';
         return fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
     }
@@ -761,6 +928,16 @@
         const branch = c.branch || 'main';
         let sha;
         const g = await ghFetch(c, 'GET', `${contentsUrl(c, item.path)}?ref=${encodeURIComponent(branch)}`);
+        if (item.op === 'delete') {
+            // Delete only the exact version the user decided on; a newer file at the same path is left alone.
+            if (g.status === 404) return 'gone';
+            if (g.status !== 200) throw new Error(`GET ${item.path} → ${g.status}`);
+            const j = await g.json();
+            if (j.sha !== item.sha) return 'changed';
+            const d = await ghFetch(c, 'DELETE', contentsUrl(c, item.path), { message: item.message, sha: item.sha, branch });
+            if (d.status !== 200) throw new Error(`DELETE ${item.path} → ${d.status}`);
+            return 'ok';
+        }
         if (g.status === 200) {
             const j = await g.json();
             if (!item.overwrite) return 'exists';
@@ -792,9 +969,13 @@
                 if (!q.length) break;
                 const item = q[0];
                 await putFile(c, item);
-                // Drop the item only if it was not replaced (re-enqueued) while uploading.
+                // Drop exactly the item just processed (by id). If it was replaced while uploading,
+                // its id is gone and the replacement stays queued.
                 const cur = loadQueue();
-                if (cur.length && cur[0].path === item.path && cur[0].content === item.content) cur.shift();
+                const at = item.id
+                    ? cur.findIndex(it => it.id === item.id)
+                    : cur.findIndex(it => !it.id && it.path === item.path && it.content === item.content); // items queued by 11.0/11.1
+                if (at >= 0) cur.splice(at, 1);
                 writeJSON(LS.queue, cur);
                 sent++;
                 updateSyncBadge();
@@ -977,9 +1158,11 @@
     }
 
     // ================= Program select / main =================
+    // Rebuilding the <select>s must not move the current selection (it used to jump to the first routine).
     function renderProgramSelect() {
-        els.progSelect.innerHTML = "";
         const editSelect = document.getElementById('editProgramSelect');
+        const mainSel = els.progSelect.value, editSel = editSelect.value;
+        els.progSelect.innerHTML = "";
         editSelect.innerHTML = "";
         Object.keys(programs).forEach(key => {
             const opt = document.createElement('option');
@@ -989,6 +1172,8 @@
             opt2.value = key; opt2.text = programs[key].title;
             editSelect.appendChild(opt2);
         });
+        if (programs[mainSel]) els.progSelect.value = mainSel;
+        if (programs[editSel]) editSelect.value = editSel;
     }
 
     els.progSelect.addEventListener('change', loadMainProgram);
@@ -1033,8 +1218,8 @@
             div.innerHTML = `
                 <div class="timeline-marker"></div>
                 <div class="timeline-content">
-                    <div class="t-name">${ex.name.split(':')[0]} ${wText}</div>
-                    <div class="t-info">${ex.sets} Sets • ${repsLabel}</div>
+                    <div class="t-name">${esc(ex.name.split(':')[0])} ${wText}</div>
+                    <div class="t-info">${esc(ex.sets)} Sets • ${esc(repsLabel)}</div>
                     <div class="t-rest">⏳ Rest: ${ex.rest}s</div>
                 </div>
             `;
@@ -1085,7 +1270,7 @@
         pIndex = 0; sIndex = 1; viewIndex = 0;
         state = 'IDLE';
         totalSeconds = 0;
-        sessionLog = []; lastCompleted = null; sessionTags = [];
+        sessionLog = []; lastCompleted = null; sessionTags = []; sessionProgram = null;
         clearInterval(timerInterval); clearInterval(totalTimerInterval);
         els.statusCard.classList.remove('work-mode', 'rest-mode');
         els.statusInd.innerText = "READY";
@@ -1100,14 +1285,6 @@
     }
 
     function resetWorkout() { if (confirm("Reset Workout?")) resetState(); }
-    function resetToDefaults() {
-        if (confirm("기본 루틴으로 되돌릴까요? 지금 루틴은 '루틴 변경 이력'에 남습니다.")) {
-            recordRoutineVersions('before-reset');
-            localStorage.removeItem('workout_programs_v10');
-            localStorage.setItem('workout_programs_v10', JSON.stringify(defaultPrograms));
-            location.reload();
-        }
-    }
 
     // ================= Workout flow =================
     function handleMainButton() {
@@ -1153,8 +1330,22 @@
         } catch (e) {}
     }
 
+    // The routine a session is run with is fixed at START, so later edits or proposals can't relabel it.
+    function snapshotSessionProgram() {
+        const id = els.progSelect.value, p = programs[id];
+        if (!p) { sessionProgram = null; return; }
+        recordRoutineVersions('session');
+        sessionProgram = { id, routine_key: p.routine_key || sanitizeKey(p.title), title: p.title, rev: revOf(p), plan: planOf(p, false) };
+    }
+    function sessionProgramOrCurrent() {
+        if (sessionProgram) return sessionProgram;
+        const p = programs[els.progSelect.value];
+        return p ? { id: els.progSelect.value, routine_key: p.routine_key || sanitizeKey(p.title), title: p.title, rev: revOf(p), plan: planOf(p, false) } : null;
+    }
+
     async function startWorkout() {
         unlockAudio();
+        snapshotSessionProgram();
         try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
         buildSessionLog();
         totalTimerInterval = setInterval(() => {
@@ -1339,8 +1530,9 @@
 
     // ================= Review sheet & Export =================
     function currentMeta() {
+        const sp = sessionProgramOrCurrent();
         return {
-            routine_key: programs[els.progSelect.value].routine_key || sanitizeKey(programs[els.progSelect.value].title),
+            routine_key: sp ? sp.routine_key : '',
             duration_min: Math.max(1, Math.round(totalSeconds / 60))
         };
     }
@@ -1371,7 +1563,7 @@
             div.className = 'rev-ex';
             let setsHtml = '';
             if (rec.type === 'time') {
-                setsHtml = `<div style="color:var(--text-secondary); font-size:0.85rem;">TIME · ${rec.reps_label} · ${rec.setCount} set</div>`;
+                setsHtml = `<div style="color:var(--text-secondary); font-size:0.85rem;">TIME · ${esc(rec.reps_label)} · ${esc(rec.setCount)} set</div>`;
             } else {
                 setsHtml = '<div class="set-grid">';
                 rec.sets.forEach((s, si) => {
@@ -1387,11 +1579,11 @@
             }
             div.innerHTML = `
                 <div class="rev-ex-head">
-                    <span class="rev-ex-name">${rec.name}</span>
+                    <span class="rev-ex-name">${esc(rec.name)}</span>
                     <span class="rev-ex-token" id="revtok-${ei}"></span>
                 </div>
                 ${setsHtml}
-                <input type="text" placeholder="주관노트" value="${rec.note || ''}" onchange="editReviewNote(${ei}, this.value)">
+                <input type="text" placeholder="주관노트" value="${esc(rec.note || '')}" onchange="editReviewNote(${ei}, this.value)">
             `;
             area.appendChild(div);
         });
@@ -1451,7 +1643,7 @@
         return {
             session_date: document.getElementById('revDate').value || todayISO(),
             routine_key: document.getElementById('revRoutine').value.trim(),
-            routine_rev: programs[els.progSelect.value] ? revOf(programs[els.progSelect.value]) : '',
+            routine_rev: (sessionProgramOrCurrent() || {}).rev || '',
             duration_min: document.getElementById('revDuration').value,
             tags: [...sessionTags],
             session_note: document.getElementById('revSessionNote').value.trim(),
@@ -1460,22 +1652,8 @@
     }
     function buildExportText() { return buildExportFromLog(currentReviewLog()); }
 
-    function rebuildExport() {
-        updateReviewTokens();
-        document.getElementById('exportPreview').value = buildExportText();
-    }
-
-    function copyExport() {
-        const text = buildExportText();
-        navigator.clipboard.writeText(text).then(() => {
-            alert("복사 완료! P1 Debriefing 세션에 붙여넣으세요.");
-        }).catch(() => {
-            const ta = document.getElementById('exportPreview');
-            ta.removeAttribute('readonly'); ta.select();
-            document.execCommand('copy'); ta.setAttribute('readonly', 'true');
-            alert("복사 완료!");
-        });
-    }
+    // Review sheet no longer shows the P1 text (sessions sync to the data repo); tokens only.
+    function rebuildExport() { updateReviewTokens(); }
 
     // ================= History =================
     function saveHistoryLog() {
@@ -1484,18 +1662,18 @@
             date: new Date().toLocaleString('ko-KR'),
             session_date: document.getElementById('revDate').value || todayISO(),
             routine_key: document.getElementById('revRoutine').value.trim(),
-            routine_title: programs[els.progSelect.value] ? programs[els.progSelect.value].title : '',
+            routine_title: (sessionProgramOrCurrent() || {}).title || '',
             duration_min: document.getElementById('revDuration').value,
             tags: [...sessionTags],
             session_note: document.getElementById('revSessionNote').value.trim(),
             sessionLog: JSON.parse(JSON.stringify(sessionLog))
         };
         // v11: tie the session to the exact routine version it was run with
-        const prog = programs[els.progSelect.value];
-        if (prog) {
-            recordRoutineVersions('session');
-            log.routine_rev = revOf(prog);
-            log.plan = planOf(prog, false);
+        const sp = sessionProgramOrCurrent();
+        if (sp) {
+            if (!sessionProgram) recordRoutineVersions('session');
+            log.routine_rev = sp.rev;
+            log.plan = sp.plan;
         }
         log.app_version = APP_VERSION;
         log.exportText = buildExportFromLog(log);
@@ -1520,11 +1698,11 @@
                     let w, r;
                     if (rec.type === 'time') { w = planWeightToken(rec); r = rec.reps_label; }
                     else { w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight)); r = fmtRepsTokens(rec.sets.map(s => s.reps)); }
-                    details += `• ${rec.name}: ${w} / ${r}<br>`;
+                    details += `• ${esc(rec.name)}: ${esc(w)} / ${esc(r)}<br>`;
                 });
                 div.innerHTML = `
-                    <div class="h-date">${log.session_date || log.date}</div>
-                    <div class="h-title">${log.routine_key} · ${log.duration_min}min ${log.tags && log.tags.length ? '· ' + log.tags.join(',') : ''}</div>
+                    <div class="h-date">${esc(log.session_date || log.date)}</div>
+                    <div class="h-title">${esc(log.routine_key)} · ${esc(log.duration_min)}min ${log.tags && log.tags.length ? '· ' + esc(log.tags.join(',')) : ''}</div>
                     <div class="h-list">${details}</div>
                     <button class="btn-sub" style="width:100%; margin-top:10px; height:40px;" onclick="copyHistory(${i})">📋 Copy for P1</button>
                 `;
@@ -1540,12 +1718,6 @@
         navigator.clipboard.writeText(text).then(() => alert("복사 완료!"));
     };
     function closeHistory() { document.getElementById('historyModal').classList.remove('open'); }
-    function clearHistory() {
-        if (confirm("Delete all history logs?")) {
-            localStorage.removeItem('workout_logs_v10');
-            openHistory();
-        }
-    }
 
     // ================= Routine editor =================
     function openSettings() {
@@ -1554,14 +1726,18 @@
         const val = document.getElementById('editProgramSelect').value;
         loadEditor(val);
         renderRoutineHistory();
+        document.getElementById('routineHistoryOut').style.display = 'none';
+        document.getElementById('appVersionLabel').innerText = `앱 v${APP_VERSION}`;
         fillSyncForm();
+        renderProposals();
+        checkProposals(false);
     }
     function closeSettings() {
         document.getElementById('settingsModal').classList.remove('open');
         saveData();
         recordRoutineVersions('edit');
         flushQueue(false);
-        loadMainProgram();
+        if (workoutIdle()) loadMainProgram(); // never wipe a workout in progress
     }
     // Close without saving: discard in-memory edits by reloading from storage
     function cancelSettings() {
@@ -1570,8 +1746,9 @@
         loadData();               // revert `programs` to last saved state
         renderProgramSelect();
         if (programs[sel]) els.progSelect.value = sel;
-        loadMainProgram();
+        if (workoutIdle()) loadMainProgram();
     }
+    function workoutIdle() { return state === 'IDLE' || state === 'FINISH'; }
     function updateProgramMeta(field, value) {
         const key = document.getElementById('editProgramSelect').value;
         if (!programs[key]) return;
@@ -1610,7 +1787,7 @@
                     <span style="font-weight:bold;">#${idx + 1}</span>
                     <button class="btn-sub" style="background:var(--danger); color:white; padding:4px 10px; height:auto;" onclick="removeEx('${key}', ${idx})">Del</button>
                 </div>
-                <div class="editor-row"><input value="${ex.name}" onchange="updateEx('${key}', ${idx}, 'name', this.value)" placeholder="Name"></div>
+                <div class="editor-row"><input value="${esc(ex.name)}" onchange="updateEx('${key}', ${idx}, 'name', this.value)" placeholder="Name"></div>
 
                 <div class="editor-row" style="display:grid; grid-template-columns: 1.2fr 1fr 1.4fr; gap:10px;">
                     <select onchange="updateEx('${key}', ${idx}, 'load_type', this.value)">
@@ -1618,15 +1795,15 @@
                         <option value="single" ${ex.load_type === 'single' ? 'selected' : ''}>single (t)</option>
                         <option value="bodyweight" ${ex.load_type === 'bodyweight' ? 'selected' : ''}>BW</option>
                     </select>
-                    <input type="number" step="any" value="${ex.weight}" onchange="updateEx('${key}', ${idx}, 'weight', this.value)" placeholder="Weight" style="color:var(--work); font-weight:bold;">
-                    <input value="${ex.youtubeId}" onchange="updateEx('${key}', ${idx}, 'youtubeId', this.value)" placeholder="YouTube ID">
+                    <input type="number" step="any" value="${esc(ex.weight)}" onchange="updateEx('${key}', ${idx}, 'weight', this.value)" placeholder="Weight" style="color:var(--work); font-weight:bold;">
+                    <input value="${esc(ex.youtubeId)}" onchange="updateEx('${key}', ${idx}, 'youtubeId', this.value)" placeholder="YouTube ID">
                 </div>
 
-                <div class="editor-row"><textarea onchange="updateEx('${key}', ${idx}, 'desc', this.value)" style="height:50px;">${ex.desc}</textarea></div>
+                <div class="editor-row"><textarea onchange="updateEx('${key}', ${idx}, 'desc', this.value)" style="height:50px;">${esc(ex.desc)}</textarea></div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                    <input type="number" value="${ex.sets}" onchange="updateEx('${key}', ${idx}, 'sets', this.value)" placeholder="Sets">
-                    <input value="${ex.reps}" onchange="updateEx('${key}', ${idx}, 'reps', this.value)" placeholder="Reps">
-                    <input type="number" value="${ex.rest}" onchange="updateEx('${key}', ${idx}, 'rest', this.value)" placeholder="Rest(sec)">
+                    <input type="number" value="${esc(ex.sets)}" onchange="updateEx('${key}', ${idx}, 'sets', this.value)" placeholder="Sets">
+                    <input value="${esc(ex.reps)}" onchange="updateEx('${key}', ${idx}, 'reps', this.value)" placeholder="Reps">
+                    <input type="number" value="${esc(ex.rest)}" onchange="updateEx('${key}', ${idx}, 'rest', this.value)" placeholder="Rest(sec)">
                     <select onchange="updateEx('${key}', ${idx}, 'type', this.value)">
                         <option value="rep" ${ex.type === 'rep' ? 'selected' : ''}>Reps</option>
                         <option value="time" ${ex.type === 'time' ? 'selected' : ''}>Time</option>
@@ -1649,13 +1826,7 @@
         loadEditor(key);
     };
 
-    // ---- Routine JSON import / export ----
-    function exportRoutine() {
-        const key = document.getElementById('editProgramSelect').value;
-        const json = JSON.stringify(programs[key], null, 2);
-        document.getElementById('routineIO').value = json;
-        navigator.clipboard.writeText(json).then(() => alert("현재 루틴 JSON 복사 완료.")).catch(() => {});
-    }
+    // ---- Routine JSON import (fallback; normal path is a repo proposal) ----
     function importRoutine() {
         const raw = document.getElementById('routineIO').value.trim();
         if (!raw) return alert("붙여넣은 JSON이 없습니다.");
@@ -1669,7 +1840,7 @@
         renderProgramSelect();
         document.getElementById('editProgramSelect').value = id;
         loadEditor(id);
-        alert(`'${obj.title}' 루틴을 반영했습니다.`);
+        alert(`'${obj.title}' 루틴을 새로 추가했습니다. 옛 루틴을 지우려면 Del, 확정하려면 Save를 누르세요.`);
     }
     function normalizeImportedEx(ex) {
         const isTime = ex.type === 'time';
@@ -1686,25 +1857,7 @@
         };
     }
 
-    // ---- v9 → v10 on-demand import (same-origin localStorage path) ----
-    function importV9Storage() {
-        const p = localStorage.getItem('workout_programs_v9');
-        const l = localStorage.getItem('workout_logs_v9');
-        if (!p && !l) {
-            return alert("이 앱에서 v9 데이터를 찾지 못했습니다.\n(Koder가 파일별로 저장소를 분리했을 수 있어요 — v9 파일에서 '전체 백업 복사' 후 여기에 붙여넣어 '백업 복원'을 쓰세요. v9에 백업 버튼이 없으면 추가해 드릴게요.)");
-        }
-        if (p) { Object.assign(programs, migrateV9(JSON.parse(p))); saveData(); }
-        if (l) {
-            const cur = JSON.parse(localStorage.getItem('workout_logs_v10') || '[]');
-            const conv = JSON.parse(l).map(convertV9Log);
-            localStorage.setItem('workout_logs_v10', JSON.stringify(conv.concat(cur)));
-        }
-        renderProgramSelect();
-        loadEditor(document.getElementById('editProgramSelect').value);
-        alert("v9 데이터를 가져왔습니다. (루틴/큐잉/영상 + 기록)");
-    }
-
-    // ---- Full backup / restore (cross-file bridge via clipboard) ----
+    // ---- Full backup / restore ----
     function backupAll() {
         const json = JSON.stringify(backupDump());
         document.getElementById('routineIO').value = json;
@@ -1715,8 +1868,34 @@
         if (!raw) return alert("붙여넣은 JSON이 없습니다.");
         let dump; try { dump = JSON.parse(raw); } catch (e) { return alert("JSON 파싱 실패: " + e.message); }
         if (dump.title && Array.isArray(dump.list)) return importRoutine(); // single routine shape
-        if (!dump.programs) return alert("형식 오류: programs 필드가 없습니다. (단일 루틴이면 '붙여넣기로 반영'을 쓰세요)");
-        if (!confirm("현재 루틴/기록을 백업 내용으로 대체합니다. 지금 루틴은 '루틴 변경 이력'에 남습니다. 진행할까요?")) return;
+        applyDump(dump);
+    }
+    // Pull backup/latest.json from the data repo (new device or wiped storage).
+    async function restoreFromRepo() {
+        const c = loadCfg();
+        if (!cfgReady(c)) return alert('먼저 GitHub 동기화 설정을 저장하세요.');
+        try {
+            const r = await ghFetch(c, 'GET', `${contentsUrl(c, 'backup/latest.json')}?ref=${encodeURIComponent(c.branch || 'main')}`, null, true);
+            if (r.status !== 200) throw new Error(`backup/latest.json → ${r.status}`);
+            applyDump(JSON.parse(await r.text()));
+        } catch (e) { alert('저장소에서 복원 실패: ' + (e.message || e)); }
+    }
+    function logDateKey(log) {
+        if (log.session_date) return log.session_date;
+        const m = (log.date || '').match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./);
+        return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
+    }
+    // Union of local and backup logs (same session = same sessionPath), newest first. Nothing local is dropped.
+    function mergeLogs(local, incoming) {
+        const seen = new Set(), out = [];
+        local.concat(incoming).forEach(l => { const k = sessionPath(l); if (!seen.has(k)) { seen.add(k); out.push(l); } });
+        return out.map((l, i) => ({ l, i })).sort((a, b) => logDateKey(b.l).localeCompare(logDateKey(a.l)) || a.i - b.i).map(x => x.l);
+    }
+    function applyDump(dump) {
+        if (!dump.programs) return alert("형식 오류: programs 필드가 없습니다.");
+        if (!workoutIdle()) return alert('운동이 끝난 뒤에 복원하세요.');
+        const localLogs = readJSON(LS.logs, []);
+        if (!confirm(`루틴을 백업 내용으로 바꾸고, 기록은 합칩니다(지금 ${localLogs.length}건, 백업 ${(dump.logs || []).length}건, 같은 세션은 하나로). 지금 루틴은 '루틴 변경 이력'에 남습니다. 진행할까요?`)) return;
         recordRoutineVersions('before-restore');
         if (Array.isArray(dump.routine_history)) {
             // Merge, never drop: keep every version from both sides.
@@ -1730,17 +1909,17 @@
             // v9 백업 덤프 → v10 스키마로 마이그레이션
             programs = migrateV9(dump.programs);
             saveData();
-            localStorage.setItem('workout_logs_v10', JSON.stringify((dump.logs || []).map(convertV9Log)));
+            writeJSON(LS.logs, mergeLogs(localLogs, (dump.logs || []).map(convertV9Log)));
         } else {
             programs = dump.programs;
             saveData();
-            if (Array.isArray(dump.logs)) localStorage.setItem('workout_logs_v10', JSON.stringify(dump.logs));
+            if (Array.isArray(dump.logs)) writeJSON(LS.logs, mergeLogs(localLogs, dump.logs));
         }
         renderProgramSelect();
         loadMainProgram();
         recordRoutineVersions('restore');
         flushQueue(false);
-        alert("복원 완료. (루틴/큐잉/영상 + 기록)\n처음 옮겨 온 경우 설정의 '전체 기록·루틴 올리기'를 한 번 누르세요.");
+        alert("복원 완료. (루틴, 루틴 이력, 기록)");
     }
 </script>
 </body>

@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Workout Logger</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Workout">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <link rel="icon" href="icon-192.png">
+    <style>
+        :root {
+            --primary: #0A84FF;
+            --work: #30D158;
+            --rest: #FF9F0A;
+            --danger: #FF453A;
+
+            --bg-color: #000000;
+            --panel-bg: #1C1C1E;
+            --border-color: #38383A;
+
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            --radius: 20px;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0; padding: 0;
+            height: 100vh; height: 100dvh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        header {
+            padding: 15px 25px;
+            padding-top: calc(15px + env(safe-area-inset-top));
+            padding-left: calc(25px + env(safe-area-inset-left));
+            padding-right: calc(25px + env(safe-area-inset-right));
+            height: calc(70px + env(safe-area-inset-top));
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0; background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .brand { font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; gap: 10px; color: var(--text-primary); }
+        .total-time-badge {
+            background: #2C2C2E; padding: 6px 12px; border-radius: 12px;
+            font-variant-numeric: tabular-nums; font-weight: 600; color: var(--work); font-size: 0.9rem;
+            border: 1px solid #3A3A3C;
+        }
+        .header-controls { display: flex; gap: 10px; }
+
+        select.modern-select {
+            padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border-color);
+            font-weight: 600; font-size: 0.9rem;
+            background: #2C2C2E; color: white;
+        }
+        .btn-icon {
+            background: #2C2C2E; border: 1px solid var(--border-color); color: white;
+            width: 36px; height: 36px; border-radius: 10px; cursor: pointer; font-size: 1.2rem;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            gap: 16px;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            border: 1px solid #2C2C2E;
+        }
+
+        .timeline-col { padding: 20px; overflow-y: auto; }
+        .timeline-title { font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .timeline-item {
+            position: relative; padding-left: 24px; margin-bottom: 24px;
+            opacity: 0.4; transition: all 0.2s; cursor: pointer;
+        }
+        .timeline-item:hover { opacity: 0.7; }
+        .timeline-item::before {
+            content: ''; position: absolute; left: 7px; top: 24px; bottom: -30px; width: 2px; background: #333;
+        }
+        .timeline-item:last-child::before { display: none; }
+
+        .timeline-marker {
+            position: absolute; left: 0; top: 4px; width: 16px; height: 16px;
+            border-radius: 50%; background: #444; border: 2px solid var(--panel-bg);
+        }
+
+        .timeline-content { display: flex; flex-direction: column; gap: 4px; }
+        .t-name { font-weight: 600; font-size: 0.95rem; line-height: 1.3; color: var(--text-primary); }
+        .t-info { font-size: 0.8rem; color: var(--text-secondary); }
+        .t-rest { font-size: 0.75rem; color: var(--rest); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+        .t-weight { font-size: 0.75rem; color: var(--primary); font-weight: 600; }
+
+        .timeline-item.active { opacity: 1; }
+        .timeline-item.active .timeline-marker { background: var(--work); box-shadow: 0 0 10px rgba(48, 209, 88, 0.4); }
+        .timeline-item.active .t-name { color: var(--work); font-weight: 700; }
+        .timeline-item.selected { opacity: 1; }
+        .timeline-item.selected .t-name { text-decoration: underline; text-decoration-color: var(--primary); text-underline-offset: 4px; }
+        .timeline-item.done { opacity: 0.3; }
+        .timeline-item.done .t-name { text-decoration: line-through; }
+
+        .content-col { background: transparent; box-shadow: none; border: none; gap: 16px; }
+
+        .video-box {
+            flex: 0 0 40%;
+            background: black; border-radius: var(--radius); overflow: hidden; position: relative;
+            box-shadow: var(--shadow); border: 1px solid #333;
+        }
+        .video-box iframe { position: absolute; top:0; left:0; width:100%; height:100%; border:none; }
+
+        .desc-box {
+            flex: 1;
+            background: var(--panel-bg); border-radius: var(--radius); padding: 25px;
+            box-shadow: var(--shadow); overflow-y: auto; border: 1px solid #2C2C2E;
+        }
+        .desc-header { margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .d-title { font-size: 2rem; font-weight: 800; margin: 0 0 8px 0; letter-spacing: -0.5px; color: white; }
+        .d-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+        .d-badge { font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; background: #333; color: #ccc; }
+        .d-badge.highlight { background: rgba(10, 132, 255, 0.2); color: var(--primary); }
+        .d-text { font-size: 1.1rem; line-height: 1.6; color: #ddd; white-space: pre-wrap; }
+
+        .dashboard-col {
+            padding: 24px 20px; justify-content: space-between; align-items: center; text-align: center;
+        }
+
+        .timer-group { margin-top: 6px; width: 100%; }
+        .status-text { font-size: 0.9rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+        .main-timer {
+            font-size: 5rem; font-weight: 900; line-height: 1; margin: 12px 0;
+            font-variant-numeric: tabular-nums; letter-spacing: -2px; color: white;
+        }
+
+        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin-bottom: 14px; }
+        .stat-card { background: #2C2C2E; padding: 15px; border-radius: 16px; border: 1px solid #3A3A3C; }
+        .stat-val { font-size: 1.5rem; font-weight: 800; color: white; }
+        .stat-lbl { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-top: 5px; }
+
+        /* Rest-time set edit chip */
+        .set-edit {
+            display: none; width: 100%; background: #2C2C2E; border: 1px solid var(--rest);
+            border-radius: 16px; padding: 12px 14px; margin-bottom: 14px;
+        }
+        .set-edit.show { display: block; }
+        .set-edit-title { font-size: 0.75rem; font-weight: 700; color: var(--rest); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .set-edit-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .set-edit-row input {
+            width: 72px; padding: 8px; text-align: center; font-size: 1.1rem; font-weight: 700;
+            background: #1C1C1E; border: 1px solid #444; border-radius: 10px; color: white;
+        }
+        .set-edit-row .unit { font-size: 0.9rem; color: var(--text-secondary); font-weight: 700; }
+
+        /* Stepper controls (weight ±0.5 / reps ±1) */
+        .stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        .stepper-row:last-of-type { margin-bottom: 0; }
+        .stepper-lbl { font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); width: 42px; text-align: left; flex: 0 0 auto; }
+        .step-btn {
+            width: 46px; height: 46px; border-radius: 12px; border: 1px solid #555; background: #3A3A3C; color: white;
+            font-size: 1.7rem; font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+        }
+        .step-btn:active { background: var(--rest); color: black; }
+        .step-val { flex: 1; text-align: center; font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; color: white; }
+        .step-unit { font-size: 0.9rem; color: var(--text-secondary); font-weight: 700; margin-left: 3px; }
+        .set-prev { margin-top: 12px; padding-top: 10px; border-top: 1px solid #3A3A3C; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; text-align: left; }
+        .set-prev b { color: var(--primary); font-weight: 700; }
+        .set-prev .cur { color: var(--work); font-weight: 700; }
+
+        /* Sync (v11) */
+        .sync-badge { align-self: center; font-size: 0.75rem; font-weight: 700; padding: 6px 10px; border-radius: 10px; background: #2C2C2E; border: 1px solid #3A3A3C; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+        .sync-badge.ok { color: var(--work); }
+        .sync-badge.wait { color: var(--rest); }
+        .sync-badge.err { color: var(--danger); }
+        .sync-box { background: #222; border: 1px solid #333; border-radius: 12px; padding: 12px; margin-bottom: 16px; font-size: 0.85rem; line-height: 1.6; }
+        .sync-status { color: var(--text-secondary); font-size: 0.8rem; white-space: pre-wrap; }
+        .rh-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #333; padding: 4px 0; }
+        .rh-row:last-child { border-bottom: none; }
+        .rh-row .rh-rev { font-family: ui-monospace, monospace; color: var(--text-secondary); }
+
+        /* Previous-session reference in content view */
+        .prev-ref { font-size: 0.85rem; background: #222; border: 1px solid #333; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; line-height: 1.5; }
+        .prev-ref.hidden { display: none; }
+        .prev-ref .pr-title { color: var(--primary); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .prev-ref .pr-body { color: #ddd; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+        .btn-group { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+        button { cursor: pointer; transition: transform 0.1s; }
+        button:active { transform: scale(0.97); }
+        .btn-main {
+            height: 60px; border-radius: 16px; border: none; font-size: 1.2rem; font-weight: 700; color: black;
+            background: var(--primary); box-shadow: 0 0 20px rgba(10, 132, 255, 0.3);
+        }
+        .btn-sub { height: 48px; border-radius: 14px; border: none; font-size: 1rem; font-weight: 600; background: #3A3A3C; color: white; }
+        .btn-return {
+            height: 40px; border-radius: 12px; border: 1px solid var(--primary); font-size: 0.9rem; font-weight: 600;
+            background: transparent; color: var(--primary); margin-bottom: 6px; display: none;
+        }
+
+        .work-mode .main-timer { color: var(--work); text-shadow: 0 0 30px rgba(48, 209, 88, 0.3); }
+        .rest-mode .main-timer { color: var(--rest); text-shadow: 0 0 30px rgba(255, 159, 10, 0.3); }
+        .dashboard-col.work-mode { border-color: var(--work); }
+        .dashboard-col.rest-mode { border-color: var(--rest); }
+
+        @media (max-width: 1100px) {
+            main { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; }
+            .timeline-col { grid-row: 1 / -1; }
+            .content-col { grid-column: 2; }
+            .dashboard-col { grid-column: 2; }
+        }
+        @media (max-width: 800px) {
+            main { display: flex; flex-direction: column; overflow-y: auto; }
+            .timeline-col { min-height: 150px; max-height: 250px; }
+            .video-box { min-height: 250px; }
+        }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.open { display: flex; }
+        .modal-content { background: #1C1C1E; width: 680px; max-width: 94vw; max-height: 88vh; border-radius: 24px; border: 1px solid #333; display: flex; flex-direction: column; overflow: hidden; color: white; }
+        .modal-header { padding: 18px 20px; background: #2C2C2E; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .modal-body { padding: 24px; overflow-y: auto; background: #1C1C1E; }
+
+        .editor-row { display: flex; gap: 10px; margin-bottom: 12px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 10px; font-size: 1rem; background: #2C2C2E; color: white; }
+        label.fld { display:block; font-size:0.7rem; color: var(--text-secondary); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+        .ex-item { background: #222; border: 1px solid #333; padding: 18px; border-radius: 16px; margin-bottom: 15px; }
+        .section-label { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 10px; }
+
+        .history-card { background: #222; border: 1px solid #333; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
+        .h-date { font-weight: bold; font-size: 1.1rem; color: var(--primary); margin-bottom: 5px; }
+        .h-title { color: #ccc; margin-bottom: 10px; font-size: 0.9rem; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .h-list { font-size: 0.85rem; color: #888; line-height: 1.5; }
+        .empty-history { text-align: center; color: #666; padding: 30px; }
+
+        /* Review sheet */
+        .rev-ex { background:#222; border:1px solid #333; border-radius:14px; padding:14px; margin-bottom:14px; }
+        .rev-ex-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .rev-ex-name { font-weight:700; font-size:1rem; }
+        .rev-ex-token { font-size:0.8rem; color:var(--primary); font-weight:700; font-variant-numeric: tabular-nums; }
+        .set-grid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+        .set-cell { display:flex; align-items:center; gap:4px; background:#1A1A1A; border:1px solid #333; border-radius:10px; padding:6px 8px; }
+        .set-cell span.si { font-size:0.7rem; color:var(--text-secondary); font-weight:700; min-width:14px; }
+        .set-cell input { width:56px; padding:6px; text-align:center; font-size:0.95rem; font-weight:700; background:#2C2C2E; border:1px solid #444; border-radius:8px; }
+        .set-cell .x { color:var(--text-secondary); font-weight:700; }
+        .meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+        .tag-toggles { display:flex; gap:10px; }
+        .tag-btn { flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:#2C2C2E; color:#ccc; font-weight:700; font-size:0.9rem; }
+        .tag-btn.on { border-color:var(--danger); color:var(--danger); background:rgba(255,69,58,0.12); }
+        #exportPreview { height:180px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:0.8rem; line-height:1.5; white-space:pre; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <span>💪</span> Fitness Logger
+        <div class="total-time-badge" id="totalTime">00:00</div>
+    </div>
+    <div class="header-controls">
+        <span class="sync-badge" id="syncBadge" onclick="openSettings()" title="동기화 상태"></span>
+        <button class="btn-icon" onclick="openHistory()" title="History Log">📅</button>
+        <select id="programSelect" class="modern-select"></select>
+        <button class="btn-icon" onclick="openSettings()" title="Settings">⚙️</button>
+    </div>
+</header>
+
+<main>
+    <aside class="panel timeline-col" id="timelineContainer">
+        <div class="timeline-title">Workout Routine</div>
+        <div id="timelineList"></div>
+    </aside>
+
+    <section class="content-col panel">
+        <div class="video-box">
+            <iframe id="youtubeFrame" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
+        <div class="desc-box">
+            <div class="desc-header">
+                <div class="d-badges">
+                    <span class="d-badge highlight" id="exTypeBadge">-</span>
+                    <span class="d-badge" id="exRestBadge">-</span>
+                    <span class="d-badge" id="exWeightBadge" style="color:var(--work)">-</span>
+                </div>
+                <h1 id="exerciseTitle" class="d-title">Title</h1>
+            </div>
+            <div id="prevRef" class="prev-ref hidden">
+                <div class="pr-title" id="prevRefTitle">📊 이전 세션</div>
+                <div class="pr-body" id="prevRefBody"></div>
+            </div>
+            <div id="exerciseDesc" class="d-text"></div>
+        </div>
+    </section>
+
+    <aside class="panel dashboard-col" id="statusCard">
+        <div class="timer-group">
+            <div id="statusIndicator" class="status-text">READY</div>
+            <div class="main-timer" id="timerDisplay">00:00</div>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-lbl">SET</div>
+                <div class="stat-val"><span id="currentSet">-</span>/<span id="totalSet">-</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-lbl">TARGET</div>
+                <div class="stat-val" id="targetValue">-</div>
+            </div>
+        </div>
+
+        <div class="set-edit" id="setEdit">
+            <div class="set-edit-title" id="setEditTitle">✓ 방금 세트</div>
+            <div class="stepper-row">
+                <span class="stepper-lbl">중량</span>
+                <button class="step-btn" onclick="stepWeight(-0.5)">−</button>
+                <div class="step-val"><span id="setWeight">0</span><span class="step-unit" id="setWeightUnit">kg</span></div>
+                <button class="step-btn" onclick="stepWeight(0.5)">+</button>
+            </div>
+            <div class="stepper-row">
+                <span class="stepper-lbl">횟수</span>
+                <button class="step-btn" onclick="stepReps(-1)">−</button>
+                <div class="step-val"><span id="setReps">0</span><span class="step-unit">회</span></div>
+                <button class="step-btn" onclick="stepReps(1)">+</button>
+            </div>
+            <div class="set-prev" id="setPrev"></div>
+        </div>
+
+        <div class="btn-group">
+            <button id="returnBtn" class="btn-return" onclick="returnToCurrent()">⬇ Return to Current</button>
+            <button id="mainBtn" class="btn-main" onclick="handleMainButton()">START</button>
+            <button id="resetBtn" class="btn-sub" onclick="resetWorkout()">RESET</button>
+        </div>
+    </aside>
+</main>
+
+<!-- Settings / Routine editor -->
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <button class="btn-sub" style="width:auto; padding:0 15px;" onclick="resetToDefaults()">Reset Defaults</button>
+            <span style="font-weight:700;">Edit Routine</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn-main" style="flex:0; width:auto; padding:0 20px; font-size:1rem; color:black;" onclick="closeSettings()">Save</button>
+                <button class="btn-icon" style="background:#3A3A3C;" onclick="cancelSettings()" title="저장하지 않고 닫기">✕</button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div style="margin-bottom: 18px;">
+                <div class="editor-row">
+                    <select id="editProgramSelect" onchange="loadEditor(this.value)"></select>
+                </div>
+                <div class="editor-row" style="display:grid; grid-template-columns: 2fr 1fr; gap:10px;">
+                    <div>
+                        <label class="fld">표시 이름 (Title)</label>
+                        <input type="text" id="editTitle" onchange="updateProgramMeta('title', this.value)" placeholder="Day A: ...">
+                    </div>
+                    <div>
+                        <label class="fld">routine_key (L3 Select)</label>
+                        <input type="text" id="editRoutineKey" onchange="updateProgramMeta('routine_key', this.value)" placeholder="Day_A">
+                    </div>
+                </div>
+                <div class="editor-row">
+                    <input type="text" id="newProgramName" placeholder="New Routine Name">
+                    <button class="btn-main" style="flex:1; height:44px; font-size:1rem;" onclick="addProgram()">Add</button>
+                    <button class="btn-sub" style="flex:1; height:44px; background:var(--danger);" onclick="deleteProgram()">Del</button>
+                </div>
+            </div>
+
+            <div id="exerciseListArea"></div>
+            <button class="btn-sub" style="width:100%; padding:15px; margin-bottom:20px;" onclick="addExercise()">+ Add Exercise</button>
+
+            <div class="section-label">루틴 반영 (JSON)</div>
+            <div class="editor-row">
+                <button class="btn-sub" style="flex:1;" onclick="exportRoutine()">📤 현재 루틴 복사</button>
+                <button class="btn-sub" style="flex:1;" onclick="importRoutine()">📥 붙여넣기로 반영</button>
+            </div>
+
+            <div class="section-label">데이터 이전 · 백업</div>
+            <div class="editor-row">
+                <button class="btn-sub" style="flex:1;" onclick="importV9Storage()">⤵️ v9 데이터 가져오기</button>
+            </div>
+            <div class="editor-row">
+                <button class="btn-sub" style="flex:1;" onclick="backupAll()">📦 전체 백업 복사</button>
+                <button class="btn-sub" style="flex:1;" onclick="restoreAll()">♻️ 백업 복원</button>
+            </div>
+
+            <div class="section-label">루틴 변경 이력</div>
+            <div id="routineHistoryArea" class="sync-box"></div>
+
+            <div class="section-label">GitHub 동기화</div>
+            <div class="sync-box">
+                <div class="meta-grid">
+                    <div><label class="fld">owner</label><input type="text" id="syncOwner" placeholder="ssim-baa" autocapitalize="off" autocorrect="off"></div>
+                    <div><label class="fld">repo (비공개 데이터 저장소)</label><input type="text" id="syncRepo" placeholder="workout-weight-data" autocapitalize="off" autocorrect="off"></div>
+                    <div><label class="fld">branch</label><input type="text" id="syncBranch" placeholder="main" autocapitalize="off" autocorrect="off"></div>
+                    <div><label class="fld">token (이 iPad에만 저장)</label><input type="password" id="syncToken" placeholder="github_pat_..." autocapitalize="off" autocorrect="off"></div>
+                </div>
+                <div class="editor-row">
+                    <button class="btn-sub" style="flex:1;" onclick="saveSyncConfig()">💾 설정 저장 · 연결 확인</button>
+                    <button class="btn-sub" style="flex:1;" onclick="flushQueue(true)">⬆️ 지금 보내기</button>
+                </div>
+                <div class="editor-row">
+                    <button class="btn-sub" style="flex:1;" onclick="enqueueEverything()">📚 전체 기록·루틴 올리기 (최초 1회)</button>
+                </div>
+                <div id="syncStatusText" class="sync-status"></div>
+            </div>
+
+            <textarea id="routineIO" placeholder="루틴/백업 JSON을 여기에 붙여넣고 위 버튼을 누르세요.&#10;· 루틴 하나만: '붙여넣기로 반영'&#10;· 전체(루틴+기록): '백업 복원'&#10;· v9 파일과 저장소가 분리된 경우: v9에서 백업 복사 → 여기에 붙여넣기 → 백업 복원" style="height:110px; font-family: ui-monospace, monospace; font-size:0.8rem; margin-bottom:40px;"></textarea>
+        </div>
+    </div>
+</div>
+
+<!-- History -->
+<div id="historyModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <button class="btn-sub" style="width:auto; padding:0 15px; background:var(--danger);" onclick="clearHistory()">Clear All</button>
+            <span style="font-weight:700;">Workout Log</span>
+            <button class="btn-sub" style="width:auto; padding:0 15px;" onclick="closeHistory()">Close</button>
+        </div>
+        <div class="modal-body" id="historyListArea"></div>
+    </div>
+</div>
+
+<!-- Finish review sheet -->
+<div id="reviewModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span style="font-weight:700;">세션 리뷰 · P1 디브리핑</span>
+            <button class="btn-sub" style="width:auto; padding:0 15px;" onclick="closeReview()">Close</button>
+        </div>
+        <div class="modal-body">
+            <div class="meta-grid">
+                <div>
+                    <label class="fld">routine</label>
+                    <input type="text" id="revRoutine" onchange="rebuildExport()">
+                </div>
+                <div>
+                    <label class="fld">session_date</label>
+                    <input type="date" id="revDate" onchange="rebuildExport()">
+                </div>
+                <div>
+                    <label class="fld">duration_min</label>
+                    <input type="number" id="revDuration" onchange="rebuildExport()">
+                </div>
+                <div>
+                    <label class="fld">tags</label>
+                    <div class="tag-toggles">
+                        <button class="tag-btn" id="tagInjury" onclick="toggleTag('injury')">injury</button>
+                        <button class="tag-btn" id="tagCondition" onclick="toggleTag('condition')">condition</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-label">종목별 실측 (계획값 프리필 · 다른 것만 수정)</div>
+            <div id="reviewExArea"></div>
+
+            <div>
+                <label class="fld">세션 주관 노트 (선택)</label>
+                <textarea id="revSessionNote" onchange="rebuildExport()" style="height:60px;" placeholder="전체 컨디션·특이사항"></textarea>
+            </div>
+
+            <div class="section-label" style="margin-top:16px;">P1 붙여넣기용 출력</div>
+            <textarea id="exportPreview" readonly></textarea>
+            <button class="btn-main" style="width:100%; height:52px; margin-top:12px;" onclick="copyExport()">📋 Copy for P1 Debriefing</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    const APP_VERSION = '11.0';
+    // ================= Default Data (V10) =================
+    const defaultPrograms = {
+        dayA: {
+            title: "Day A: 스트렝스 & 파워",
+            routine_key: "Day_A",
+            list: [
+                { name: "덤벨 고블릿 스쿼트", load_type: "single", weight: 20, desc: "덤벨을 가슴 앞에", youtubeId: "0OWbS1WiUGU", sets: 4, reps: 12, rest: 90, type: "rep" },
+                { name: "덤벨 플로어 프레스", load_type: "each", weight: 20, desc: "바닥에서 프레스", youtubeId: "T0Y3OBF1bNI", sets: 4, reps: 10, rest: 90, type: "rep" },
+                { name: "원 암 덤벨 로우", load_type: "single", weight: 25, desc: "등 자극 집중", youtubeId: "ZRSGpBUVcNw", sets: 4, reps: 12, rest: 60, type: "rep" },
+                { name: "덤벨 숄더 프레스", load_type: "each", weight: 15, desc: "어깨 전면/측면", youtubeId: "Did01dFR3Lk", sets: 3, reps: 12, rest: 60, type: "rep" }
+            ]
+        },
+        dayB: {
+            title: "Day B: 근비대 & 컨디셔닝",
+            routine_key: "Day_B",
+            list: [
+                { name: "덤벨 루마니안 데드리프트", load_type: "each", weight: 30, desc: "힙힌지 집중", youtubeId: "wqMYwk_-P14", sets: 4, reps: 12, rest: 90, type: "rep" },
+                { name: "벤트오버 덤벨 로우", load_type: "each", weight: 25, desc: "등 상부 자극", youtubeId: "knB5Q4FN4ck", sets: 4, reps: 12, rest: 60, type: "rep" },
+                { name: "덤벨 런지 (제자리)", load_type: "each", weight: 15, desc: "하체 밸런스", youtubeId: "9jgyBRdTSFM", sets: 3, reps: 12, rest: 60, type: "rep" },
+                { name: "덤벨 컬 & 익스텐션", load_type: "each", weight: 10, desc: "이두/삼두 슈퍼세트", youtubeId: "6JKqBKuGaPc", sets: 3, reps: 15, rest: 45, type: "rep" }
+            ]
+        }
+    };
+
+    let programs = {};
+    let bootedFromDefaults = false;
+    let currentRoutine = [];
+    let pIndex = 0;
+    let viewIndex = 0;
+    let sIndex = 1;
+    let state = 'IDLE';
+    let timerInterval = null, totalTimerInterval = null;
+    let secondsLeft = 0, totalSeconds = 0;
+
+    // Per-session actual log (parallel to currentRoutine)
+    let sessionLog = [];
+    let lastCompleted = null; // {exIdx, setIdx, type}
+    let sessionTags = [];
+
+    const els = {
+        title: document.getElementById('exerciseTitle'),
+        desc: document.getElementById('exerciseDesc'),
+        video: document.getElementById('youtubeFrame'),
+        curSet: document.getElementById('currentSet'),
+        totSet: document.getElementById('totalSet'),
+        target: document.getElementById('targetValue'),
+        timer: document.getElementById('timerDisplay'),
+        totalTime: document.getElementById('totalTime'),
+        mainBtn: document.getElementById('mainBtn'),
+        returnBtn: document.getElementById('returnBtn'),
+        statusCard: document.getElementById('statusCard'),
+        statusInd: document.getElementById('statusIndicator'),
+        progSelect: document.getElementById('programSelect'),
+        typeBadge: document.getElementById('exTypeBadge'),
+        restBadge: document.getElementById('exRestBadge'),
+        weightBadge: document.getElementById('exWeightBadge'),
+        timelineList: document.getElementById('timelineList'),
+        historyArea: document.getElementById('historyListArea'),
+        setEdit: document.getElementById('setEdit'),
+        setEditTitle: document.getElementById('setEditTitle'),
+        setWeight: document.getElementById('setWeight'),
+        setWeightUnit: document.getElementById('setWeightUnit'),
+        setReps: document.getElementById('setReps'),
+        setPrev: document.getElementById('setPrev'),
+        prevRef: document.getElementById('prevRef'),
+        prevRefTitle: document.getElementById('prevRefTitle'),
+        prevRefBody: document.getElementById('prevRefBody')
+    };
+
+    window.onload = function() {
+        loadData();
+        renderProgramSelect();
+        els.progSelect.value = Object.keys(programs)[0];
+        loadMainProgram();
+        // A fresh install boots with built-in defaults; don't record those as a real routine version.
+        if (!bootedFromDefaults) recordRoutineVersions('init');
+        updateSyncBadge();
+        try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+        setTimeout(() => flushQueue(false), 1500);
+    };
+    window.addEventListener('online', () => flushQueue(false));
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushQueue(false); });
+
+    // ================= v11: routine history + GitHub sync =================
+    // Storage keys. Program/log keys stay v10 so a v10 backup restores as-is.
+    const LS = {
+        programs: 'workout_programs_v10',
+        logs: 'workout_logs_v10',
+        rhist: 'workout_routine_history_v11',
+        queue: 'workout_sync_queue_v11',
+        cfg: 'workout_sync_cfg_v11',
+        sync: 'workout_sync_state_v11'
+    };
+    function readJSON(key, fallback) {
+        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+    }
+    function writeJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+    function hashStr(s) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+        return (h >>> 0).toString(16).padStart(8, '0');
+    }
+    // full = with cue text and video (used for the revision hash and routine files);
+    // core = plan fields only (stored inside each session).
+    function planOf(p, full) {
+        return {
+            title: p.title || '',
+            routine_key: p.routine_key || sanitizeKey(p.title),
+            list: (p.list || []).map(ex => {
+                const o = { name: ex.name, load_type: ex.load_type, weight: ex.weight, sets: ex.sets, reps: ex.reps, rest: ex.rest, type: ex.type };
+                if (full) { o.desc = ex.desc || ''; o.youtubeId = ex.youtubeId || ''; }
+                return o;
+            })
+        };
+    }
+    function revOf(p) { return hashStr(JSON.stringify(planOf(p, true))); }
+    function loadRoutineHistory() { return readJSON(LS.rhist, []); }
+    function lastVersionOf(hist, programId) {
+        for (let i = hist.length - 1; i >= 0; i--) if (hist[i].program_id === programId) return hist[i];
+        return null;
+    }
+    function compactTs(iso) { return iso.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z'); }
+    function routinePath(e) { return `routines/${e.routine_key}/${compactTs(e.saved_at)}_${e.rev}.json`; }
+    function sessionPath(log) {
+        const key = log.routine_key || 'NA';
+        const tag = hashStr(log.date || JSON.stringify(log.sessionLog || [])).slice(0, 6);
+        if (!log.session_date) {
+            const m = (log.date || '').match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./);
+            const d = m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : 'nodate';
+            return `sessions/legacy/${d}_${key}_${tag}.json`;
+        }
+        return `sessions/${log.session_date.slice(0, 4)}/${log.session_date}_${key}_${tag}.json`;
+    }
+
+    // Append a version for every program whose content changed since its last recorded version.
+    // Never rewrites or drops earlier versions.
+    function recordRoutineVersions(reason) {
+        const hist = loadRoutineHistory();
+        // Built-in defaults on a fresh install are not a routine the user ran; skip them as a "before" snapshot.
+        if (bootedFromDefaults && !hist.length && (reason === 'init' || reason.startsWith('before-'))) return [];
+        const now = new Date().toISOString();
+        const added = [];
+        Object.keys(programs).forEach(id => {
+            const p = programs[id];
+            const rev = revOf(p);
+            const last = lastVersionOf(hist, id);
+            if (last && last.rev === rev && !last.deleted) return;
+            added.push({ program_id: id, routine_key: p.routine_key || sanitizeKey(p.title), rev, saved_at: now, reason, prev_rev: last ? last.rev : null, program: planOf(p, true) });
+        });
+        const seen = new Set(hist.map(h => h.program_id));
+        seen.forEach(id => {
+            if (programs[id]) return;
+            const last = lastVersionOf(hist, id);
+            if (last && !last.deleted) added.push({ program_id: id, routine_key: last.routine_key, rev: last.rev, saved_at: now, reason, prev_rev: last.rev, deleted: true, program: last.program });
+        });
+        if (!added.length) return [];
+        writeJSON(LS.rhist, hist.concat(added));
+        added.forEach(e => enqueue(routinePath(e), e, `routine ${e.routine_key} ${e.deleted ? 'deleted' : e.rev} (${reason})`, false));
+        enqueueBackup();
+        return added;
+    }
+
+    // Field-level diff between two routine versions (by exercise name).
+    function diffPrograms(a, b) {
+        const lines = [];
+        const fields = ['load_type', 'weight', 'sets', 'reps', 'rest', 'type'];
+        const am = new Map((a ? a.list : []).map(x => [x.name, x]));
+        const bm = new Map((b ? b.list : []).map(x => [x.name, x]));
+        (b ? b.list : []).forEach(x => {
+            const o = am.get(x.name);
+            if (!o) { lines.push(`+ ${x.name}  ${planWeightToken(x)} × ${x.reps} × ${x.sets}세트`); return; }
+            const ch = fields.filter(f => String(o[f]) !== String(x[f])).map(f => `${f} ${o[f]} → ${x[f]}`);
+            if (ch.length) lines.push(`~ ${x.name}  ${ch.join(', ')}`);
+            else if ((o.desc || '') !== (x.desc || '') || (o.youtubeId || '') !== (x.youtubeId || '')) lines.push(`~ ${x.name}  설명 또는 영상만 바뀜`);
+        });
+        (a ? a.list : []).forEach(x => { if (!bm.has(x.name)) lines.push(`- ${x.name}  ${planWeightToken(x)} × ${x.reps} × ${x.sets}세트`); });
+        return lines.length ? lines.join('\n') : '(종목 구성 차이 없음)';
+    }
+
+    function renderRoutineHistory() {
+        const area = document.getElementById('routineHistoryArea');
+        const hist = loadRoutineHistory();
+        if (!hist.length) { area.innerHTML = '<div class="sync-status">아직 기록된 판이 없습니다.</div>'; return; }
+        area.innerHTML = '';
+        hist.map((e, i) => ({ e, i })).reverse().slice(0, 30).forEach(({ e, i }) => {
+            const row = document.createElement('div');
+            row.className = 'rh-row';
+            const when = new Date(e.saved_at).toLocaleString('ko-KR');
+            row.innerHTML = `
+                <span>${e.routine_key}${e.deleted ? ' (삭제)' : ''} <span class="rh-rev">${e.rev}</span><br><span class="sync-status">${when} · ${e.reason}</span></span>
+                <span style="display:flex; gap:6px; align-items:center;">
+                    <button class="btn-sub" style="height:34px; padding:0 10px;" onclick="showRoutineDiff(${i})">비교</button>
+                    <button class="btn-sub" style="height:34px; padding:0 10px;" onclick="showRoutineVersion(${i})">보기</button>
+                </span>`;
+            area.appendChild(row);
+        });
+    }
+    window.showRoutineVersion = function(i) {
+        const e = loadRoutineHistory()[i];
+        if (!e) return;
+        document.getElementById('routineIO').value = JSON.stringify(e.program, null, 2);
+        alert(`${e.routine_key} ${e.rev} 판을 아래 칸에 넣었습니다.\n이 판으로 되돌리려면 '붙여넣기로 반영'을 누르세요(새 루틴으로 추가됩니다).`);
+    };
+    window.showRoutineDiff = function(i) {
+        const hist = loadRoutineHistory();
+        const e = hist[i];
+        if (!e) return;
+        let prev = null;
+        for (let j = i - 1; j >= 0; j--) if (hist[j].program_id === e.program_id) { prev = hist[j]; break; }
+        const head = prev ? `${e.routine_key}: ${prev.rev} → ${e.rev}` : `${e.routine_key}: 첫 기록 ${e.rev}`;
+        document.getElementById('routineIO').value = `${head}\n${diffPrograms(prev ? prev.program : null, e.deleted ? null : e.program)}`;
+    };
+
+    // ---- Outbox queue (survives reloads; flushed when online) ----
+    function loadQueue() { return readJSON(LS.queue, []); }
+    function enqueue(path, obj, message, overwrite) {
+        const q = loadQueue().filter(it => it.path !== path);
+        q.push({ path, content: JSON.stringify(obj, null, 2), message, overwrite: !!overwrite });
+        writeJSON(LS.queue, q);
+        updateSyncBadge();
+    }
+    function backupDump() {
+        return { v: 'workout_v11', exported_at: new Date().toISOString(), programs, routine_history: loadRoutineHistory(), logs: readJSON(LS.logs, []) };
+    }
+    function enqueueBackup() { enqueue('backup/latest.json', backupDump(), 'backup', true); }
+
+    function loadCfg() { return readJSON(LS.cfg, {}); }
+    function cfgReady(c) { return !!(c.owner && c.repo && c.token); }
+    function loadSyncState() { return readJSON(LS.sync, {}); }
+    function setSyncState(patch) { writeJSON(LS.sync, Object.assign(loadSyncState(), patch)); updateSyncBadge(); }
+
+    function updateSyncBadge() {
+        const b = document.getElementById('syncBadge');
+        if (!b) return;
+        const c = loadCfg(), q = loadQueue(), st = loadSyncState();
+        b.className = 'sync-badge';
+        if (!cfgReady(c)) { b.innerText = q.length ? `미연결 · 대기 ${q.length}` : '미연결'; if (q.length) b.classList.add('wait'); }
+        else if (st.error) { b.innerText = `오류 · 대기 ${q.length}`; b.classList.add('err'); }
+        else if (q.length) { b.innerText = `대기 ${q.length}`; b.classList.add('wait'); }
+        else { b.innerText = '동기화됨'; b.classList.add('ok'); }
+        const t = document.getElementById('syncStatusText');
+        if (t) {
+            const last = st.last_ok ? new Date(st.last_ok).toLocaleString('ko-KR') : '없음';
+            t.innerText = `보낼 파일 ${q.length}개 · 마지막 성공 ${last}` + (st.error ? `\n최근 오류: ${st.error}` : '');
+        }
+    }
+
+    function b64utf8(str) {
+        const bytes = new TextEncoder().encode(str);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+    }
+    function ghFetch(c, method, url, body) {
+        const headers = { 'Authorization': `Bearer ${c.token}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+        if (body) headers['Content-Type'] = 'application/json';
+        return fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+    }
+    function contentsUrl(c, path) {
+        return `https://api.github.com/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+    }
+    async function putFile(c, item) {
+        const branch = c.branch || 'main';
+        let sha;
+        const g = await ghFetch(c, 'GET', `${contentsUrl(c, item.path)}?ref=${encodeURIComponent(branch)}`);
+        if (g.status === 200) {
+            const j = await g.json();
+            if (!item.overwrite) return 'exists';
+            sha = j.sha;
+        } else if (g.status !== 404) {
+            throw new Error(`GET ${item.path} → ${g.status}`);
+        }
+        const body = { message: item.message, content: b64utf8(item.content), branch };
+        if (sha) body.sha = sha;
+        const p = await ghFetch(c, 'PUT', contentsUrl(c, item.path), body);
+        if (p.status !== 200 && p.status !== 201) {
+            const t = await p.text();
+            throw new Error(`PUT ${item.path} → ${p.status} ${t.slice(0, 120)}`);
+        }
+        return 'ok';
+    }
+
+    let flushing = false;
+    async function flushQueue(manual) {
+        const c = loadCfg();
+        if (!cfgReady(c)) { updateSyncBadge(); if (manual) alert('GitHub 동기화 설정이 비어 있습니다.'); return; }
+        if (!navigator.onLine) { updateSyncBadge(); if (manual) alert('오프라인입니다. 연결되면 자동으로 보냅니다.'); return; }
+        if (flushing) { if (manual) alert('이미 보내는 중입니다. 잠시 뒤 상태를 확인하세요.'); return; }
+        flushing = true;
+        let sent = 0;
+        try {
+            while (true) {
+                const q = loadQueue();
+                if (!q.length) break;
+                const item = q[0];
+                await putFile(c, item);
+                // Drop the item only if it was not replaced (re-enqueued) while uploading.
+                const cur = loadQueue();
+                if (cur.length && cur[0].path === item.path && cur[0].content === item.content) cur.shift();
+                writeJSON(LS.queue, cur);
+                sent++;
+                updateSyncBadge();
+            }
+            setSyncState({ last_ok: new Date().toISOString(), error: '' });
+            if (manual) alert(sent ? `${sent}개 파일을 보냈습니다.` : '보낼 파일이 없습니다.');
+        } catch (e) {
+            setSyncState({ error: String(e.message || e).slice(0, 200) });
+            if (manual) alert('보내기 실패: ' + (e.message || e));
+        } finally {
+            flushing = false;
+            updateSyncBadge();
+        }
+    }
+
+    function fillSyncForm() {
+        const c = loadCfg();
+        document.getElementById('syncOwner').value = c.owner || '';
+        document.getElementById('syncRepo').value = c.repo || '';
+        document.getElementById('syncBranch').value = c.branch || 'main';
+        document.getElementById('syncToken').value = c.token || '';
+        updateSyncBadge();
+    }
+    window.saveSyncConfig = async function() {
+        const c = {
+            owner: document.getElementById('syncOwner').value.trim(),
+            repo: document.getElementById('syncRepo').value.trim(),
+            branch: document.getElementById('syncBranch').value.trim() || 'main',
+            token: document.getElementById('syncToken').value.trim()
+        };
+        writeJSON(LS.cfg, c);
+        if (!cfgReady(c)) { updateSyncBadge(); return alert('owner, repo, token을 모두 넣어 주세요.'); }
+        try {
+            const r = await ghFetch(c, 'GET', `https://api.github.com/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}`);
+            if (r.status !== 200) throw new Error(`저장소 확인 실패 (${r.status})`);
+            const j = await r.json();
+            const warn = j.private ? '' : '\n\n경고: 이 저장소가 공개 상태입니다. 기록이 공개됩니다.';
+            setSyncState({ error: '' });
+            alert(`연결 확인: ${j.full_name}${warn}`);
+            flushQueue(false);
+        } catch (e) {
+            setSyncState({ error: String(e.message || e) });
+            alert('연결 실패: ' + (e.message || e));
+        }
+    };
+    window.enqueueEverything = function() {
+        const logs = readJSON(LS.logs, []);
+        if (!confirm(`기록 ${logs.length}건과 루틴 이력 전체를 올립니다. 이미 올라간 파일은 건너뜁니다.`)) return;
+        recordRoutineVersions('init');
+        logs.slice().reverse().forEach(log => enqueue(sessionPath(log), log, `session ${log.session_date || 'legacy'} ${log.routine_key || ''}`, false));
+        loadRoutineHistory().forEach(e => enqueue(routinePath(e), e, `routine ${e.routine_key} ${e.rev} (${e.reason})`, false));
+        enqueueBackup();
+        flushQueue(true);
+    };
+
+    // ================= Data =================
+    function loadData() {
+        const stored = localStorage.getItem('workout_programs_v10');
+        bootedFromDefaults = !stored;
+        if (stored) {
+            programs = JSON.parse(stored);
+        } else {
+            const legacy = localStorage.getItem('workout_programs_v9');
+            programs = legacy ? migrateV9(JSON.parse(legacy)) : JSON.parse(JSON.stringify(defaultPrograms));
+            saveData();
+        }
+        // Safety net: never boot into a blank state
+        if (!programs || Object.keys(programs).length === 0) {
+            programs = JSON.parse(JSON.stringify(defaultPrograms));
+            saveData();
+        }
+        migrateLegacyLogs();
+    }
+
+    // Bring v9 workout history (workout_logs_v9) into v10 once, if v10 has none yet
+    function migrateLegacyLogs() {
+        if (localStorage.getItem('workout_logs_v10')) return;
+        const raw = localStorage.getItem('workout_logs_v9');
+        if (!raw) return;
+        let v9logs; try { v9logs = JSON.parse(raw); } catch (e) { return; }
+        const converted = (v9logs || []).map(convertV9Log);
+        localStorage.setItem('workout_logs_v10', JSON.stringify(converted));
+    }
+    function convertV9Log(l) {
+        const sessionLog = (l.exercises || []).map(ex => {
+            const wm = (ex.weight != null ? ex.weight.toString() : '').match(/[\d.]+/);
+            const w = wm ? parseFloat(wm[0]) : 0;
+            const rm = (ex.reps != null ? ex.reps.toString() : '').match(/[\d.]+/);
+            const r = rm ? parseFloat(rm[0]) : 0;
+            const n = parseInt(ex.sets) || 1;
+            return {
+                name: ex.name, load_type: (ex.weight && ex.weight !== '-') ? 'each' : 'bodyweight', type: 'rep',
+                sets: Array.from({ length: n }, () => ({ weight: w, reps: r })), note: ''
+            };
+        });
+        const durMin = (l.duration && l.duration.toString().includes(':'))
+            ? Math.round(l.duration.split(':').reduce((a, b) => a * 60 + Number(b), 0) / 60)
+            : (parseInt(l.duration) || '');
+        const log = {
+            date: l.date || '', session_date: '', routine_key: '',
+            routine_title: l.routineTitle || '', duration_min: durMin,
+            tags: [], session_note: '', sessionLog, legacy: true
+        };
+        log.exportText = buildExportFromLog(log);
+        return log;
+    }
+
+    function migrateV9(v9) {
+        const out = {};
+        Object.keys(v9).forEach(key => {
+            const p = v9[key];
+            out[key] = {
+                title: p.title,
+                routine_key: key === 'dayA' ? 'Day_A' : key === 'dayB' ? 'Day_B' : sanitizeKey(p.title),
+                list: (p.list || []).map(convertV9Ex)
+            };
+        });
+        return out;
+    }
+    function convertV9Ex(ex) {
+        const isTime = ex.type === 'time';
+        const wm = (ex.weight != null ? ex.weight.toString() : '').match(/[\d.]+/);
+        const weight = wm ? parseFloat(wm[0]) : 0;
+        const load_type = (!ex.weight || isTime) ? 'bodyweight' : 'each';
+        let reps = ex.reps;
+        if (!isTime) { const rm = (ex.reps != null ? ex.reps.toString() : '').match(/[\d.]+/); reps = rm ? parseFloat(rm[0]) : 10; }
+        return {
+            name: ex.name, load_type, weight,
+            desc: ex.desc || '', youtubeId: ex.youtubeId || '',
+            sets: parseInt(ex.sets) || 3, reps, rest: parseInt(ex.rest) || 60,
+            type: ex.type || 'rep'
+        };
+    }
+    function sanitizeKey(s) { return (s || 'Routine').split(':')[0].trim().replace(/\s+/g, '_'); }
+
+    function saveData() {
+        localStorage.setItem('workout_programs_v10', JSON.stringify(programs));
+        renderProgramSelect();
+    }
+
+    // ================= Helpers =================
+    function num(x) { const n = parseFloat(x); return isNaN(n) ? 0 : n; }
+    function suffixOf(loadType) { return loadType === 'each' ? 'e' : loadType === 'single' ? 't' : 'BW'; }
+    function planWeightToken(ex) {
+        if (ex.type === 'time' || ex.load_type === 'bodyweight') return 'BW';
+        return `${num(ex.weight)}${suffixOf(ex.load_type)}`;
+    }
+    function todayISO() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function fmtWeightTokens(loadType, weights) {
+        if (loadType === 'bodyweight') return 'BW';
+        const s = suffixOf(loadType);
+        const allSame = weights.every(w => w === weights[0]);
+        return allSame ? `${num(weights[0])}${s}` : weights.map(w => `${num(w)}${s}`).join('/');
+    }
+    function fmtRepsTokens(repsArr) {
+        const allSame = repsArr.every(r => r === repsArr[0]);
+        return allSame ? `${repsArr[0]}` : repsArr.join('/');
+    }
+    // Trim trailing zeros: 20 -> "20", 22.5 -> "22.5"
+    function fmtNum(x) { const n = num(x); return Number.isInteger(n) ? `${n}` : `${n}`; }
+
+    // Most-recent saved session that contains this exercise (history is newest-first)
+    function findLastSession(exName) {
+        let history; try { history = JSON.parse(localStorage.getItem('workout_logs_v10') || '[]'); } catch (e) { return null; }
+        for (const log of history) {
+            const rec = (log.sessionLog || []).find(r => r.name === exName);
+            if (rec) return { log, rec };
+        }
+        return null;
+    }
+    // Per-set summary of a saved rec: "20e×12, 22.5e×12"
+    function fmtRecPerSet(rec) {
+        if (!rec) return '';
+        if (rec.type === 'time') return `${rec.reps_label} · ${rec.setCount} set`;
+        const s = suffixOf(rec.load_type);
+        return (rec.sets || []).map(x => `${fmtNum(x.weight)}${s}×${x.reps}`).join(',  ');
+    }
+
+    // ================= Program select / main =================
+    function renderProgramSelect() {
+        els.progSelect.innerHTML = "";
+        const editSelect = document.getElementById('editProgramSelect');
+        editSelect.innerHTML = "";
+        Object.keys(programs).forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key; opt.text = programs[key].title;
+            els.progSelect.appendChild(opt);
+            const opt2 = document.createElement('option');
+            opt2.value = key; opt2.text = programs[key].title;
+            editSelect.appendChild(opt2);
+        });
+    }
+
+    els.progSelect.addEventListener('change', loadMainProgram);
+
+    function loadMainProgram() {
+        resetState();
+        const key = els.progSelect.value;
+        if (!programs[key]) return;
+        currentRoutine = JSON.parse(JSON.stringify(programs[key].list));
+        renderTimeline();
+        renderContentView(0);
+    }
+
+    window.selectExercise = function(idx) {
+        viewIndex = idx;
+        if (state === 'IDLE') pIndex = idx;
+        renderTimeline();
+        renderContentView(idx);
+    };
+
+    window.returnToCurrent = function() {
+        viewIndex = pIndex;
+        renderTimeline();
+        renderContentView(pIndex);
+    };
+
+    function renderTimeline() {
+        els.timelineList.innerHTML = "";
+        currentRoutine.forEach((ex, idx) => {
+            const div = document.createElement('div');
+            let classes = "timeline-item";
+            if (idx === pIndex && state !== 'IDLE' && state !== 'FINISH') classes += " active";
+            if (idx < pIndex) classes += " done";
+            if (idx === viewIndex) classes += " selected";
+            div.className = classes;
+            div.onclick = () => selectExercise(idx);
+
+            const wToken = planWeightToken(ex);
+            const wText = wToken !== 'BW' ? `<span class="t-weight">(${wToken})</span>` : '';
+            const repsLabel = ex.type === 'time' ? ex.reps : `${ex.reps}회`;
+
+            div.innerHTML = `
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                    <div class="t-name">${ex.name.split(':')[0]} ${wText}</div>
+                    <div class="t-info">${ex.sets} Sets • ${repsLabel}</div>
+                    <div class="t-rest">⏳ Rest: ${ex.rest}s</div>
+                </div>
+            `;
+            els.timelineList.appendChild(div);
+        });
+    }
+
+    function renderContentView(idx) {
+        if (!currentRoutine[idx]) return;
+        const ex = currentRoutine[idx];
+
+        els.title.innerText = ex.name;
+        els.desc.innerText = ex.desc;
+        els.typeBadge.innerText = ex.type === 'time' ? 'TIME' : 'REPS';
+        els.restBadge.innerText = `Rest: ${ex.rest}s`;
+        const wToken = planWeightToken(ex);
+        els.weightBadge.innerText = wToken !== 'BW' ? `Weight: ${wToken}` : 'BW';
+
+        const newSrc = ex.youtubeId ? `https://www.youtube.com/embed/${ex.youtubeId}?autoplay=1&mute=1&loop=1&playlist=${ex.youtubeId}` : '';
+        if (els.video.src !== newSrc) els.video.src = newSrc;
+
+        // Previous-session reference for this exercise
+        const prev = findLastSession(ex.name);
+        if (prev) {
+            const when = prev.log.session_date || prev.log.date || '';
+            els.prevRefTitle.innerText = `📊 이전 세션${when ? ' · ' + when : ''}`;
+            els.prevRefBody.innerText = fmtRecPerSet(prev.rec);
+            els.prevRef.classList.remove('hidden');
+        } else {
+            els.prevRef.classList.add('hidden');
+        }
+
+        const targetLabel = ex.type === 'time' ? ex.reps : `${ex.reps}회`;
+        if (idx !== pIndex && state !== 'IDLE' && state !== 'FINISH') {
+            els.returnBtn.style.display = 'block';
+            els.curSet.innerText = "-";
+            els.totSet.innerText = ex.sets;
+            els.target.innerText = targetLabel;
+        } else {
+            els.returnBtn.style.display = 'none';
+            els.curSet.innerText = state !== 'IDLE' ? sIndex : "-";
+            els.totSet.innerText = ex.sets;
+            els.target.innerText = targetLabel;
+        }
+    }
+
+    function resetState() {
+        pIndex = 0; sIndex = 1; viewIndex = 0;
+        state = 'IDLE';
+        totalSeconds = 0;
+        sessionLog = []; lastCompleted = null; sessionTags = [];
+        clearInterval(timerInterval); clearInterval(totalTimerInterval);
+        els.statusCard.classList.remove('work-mode', 'rest-mode');
+        els.statusInd.innerText = "READY";
+        els.timer.innerText = "00:00";
+        els.totalTime.innerText = "00:00";
+        els.mainBtn.innerText = "START";
+        els.mainBtn.style.background = "var(--primary)";
+        els.mainBtn.style.color = "black";
+        hideSetEdit();
+        renderTimeline();
+        renderContentView(0);
+    }
+
+    function resetWorkout() { if (confirm("Reset Workout?")) resetState(); }
+    function resetToDefaults() {
+        if (confirm("기본 루틴으로 되돌릴까요? 지금 루틴은 '루틴 변경 이력'에 남습니다.")) {
+            recordRoutineVersions('before-reset');
+            localStorage.removeItem('workout_programs_v10');
+            localStorage.setItem('workout_programs_v10', JSON.stringify(defaultPrograms));
+            location.reload();
+        }
+    }
+
+    // ================= Workout flow =================
+    function handleMainButton() {
+        if (state === 'IDLE') startWorkout();
+        else if (state === 'WORK') finishSet();
+        else if (state === 'REST') startNextSet();
+        else if (state === 'FINISH') resetState();
+    }
+
+    function buildSessionLog() {
+        sessionLog = currentRoutine.map(ex => {
+            if (ex.type === 'time') {
+                return { name: ex.name, load_type: ex.load_type, type: 'time', reps_label: ex.reps, setCount: ex.sets, note: '' };
+            }
+            const plan = { weight: num(ex.weight), reps: num(ex.reps) };
+            return {
+                name: ex.name, load_type: ex.load_type, type: 'rep',
+                sets: Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ ...plan })),
+                note: ''
+            };
+        });
+    }
+
+    // Offline beep (replaces the external .ogg). AudioContext must be unlocked by a user gesture.
+    let audioCtx = null;
+    function unlockAudio() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        } catch (e) {}
+    }
+    function beep() {
+        try {
+            if (!audioCtx) return;
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = 'sine'; o.frequency.value = 880;
+            g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.35);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + 0.4);
+        } catch (e) {}
+    }
+
+    async function startWorkout() {
+        unlockAudio();
+        try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+        buildSessionLog();
+        totalTimerInterval = setInterval(() => {
+            totalSeconds++;
+            const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            els.totalTime.innerText = `${m}:${s}`;
+        }, 1000);
+        pIndex = viewIndex;
+        startNextSet();
+    }
+
+    function startNextSet() {
+        clearInterval(timerInterval);
+        state = 'WORK';
+        viewIndex = pIndex;
+        hideSetEdit();
+
+        const ex = currentRoutine[pIndex];
+        els.statusCard.classList.remove('rest-mode');
+        els.statusCard.classList.add('work-mode');
+        els.statusInd.innerText = "WORKOUT";
+        els.mainBtn.innerText = "COMPLETE";
+        els.mainBtn.style.background = "var(--work)";
+        els.mainBtn.style.color = "black";
+
+        if (ex.type === 'time') {
+            let duration = 30;
+            const label = (ex.reps || '').toString();
+            if (label.includes('분')) duration = parseInt(label) * 60;
+            else if (label.includes('초')) duration = parseInt(label);
+            else if (!isNaN(parseInt(label))) duration = parseInt(label);
+            secondsLeft = duration;
+            runTimer(() => finishSet());
+        } else {
+            secondsLeft = 0;
+            els.timer.innerText = "00:00";
+            timerInterval = setInterval(() => { secondsLeft++; updateTimerText(); }, 1000);
+        }
+
+        renderTimeline();
+        renderContentView(pIndex);
+    }
+
+    function finishSet() {
+        clearInterval(timerInterval);
+        const ex = currentRoutine[pIndex];
+        lastCompleted = { exIdx: pIndex, setIdx: sIndex - 1, type: ex.type };
+
+        if (sIndex >= ex.sets) {
+            if (pIndex < currentRoutine.length - 1) {
+                pIndex++; sIndex = 1;
+                startRest(ex.rest, true);
+            } else {
+                finishWorkout();
+            }
+        } else {
+            sIndex++;
+            startRest(ex.rest, false);
+        }
+    }
+
+    function startRest(duration, isChange) {
+        state = 'REST';
+        secondsLeft = duration;
+        if (isChange) viewIndex = pIndex;
+
+        els.statusCard.classList.remove('work-mode');
+        els.statusCard.classList.add('rest-mode');
+        els.statusInd.innerText = isChange ? "NEXT EXERCISE" : "REST TIME";
+        els.mainBtn.innerText = "SKIP";
+        els.mainBtn.style.background = "var(--rest)";
+        els.mainBtn.style.color = "black";
+
+        showSetEdit();
+        renderTimeline();
+        if (isChange) renderContentView(pIndex);
+        runTimer(() => startNextSet());
+    }
+
+    function runTimer(cb) {
+        updateTimerText();
+        timerInterval = setInterval(() => {
+            secondsLeft--;
+            updateTimerText();
+            if (secondsLeft <= 0) {
+                clearInterval(timerInterval);
+                beep();
+                cb();
+            }
+        }, 1000);
+    }
+
+    function updateTimerText() {
+        const neg = secondsLeft < 0;
+        const abs = Math.abs(secondsLeft);
+        const m = Math.floor(abs / 60).toString().padStart(2, '0');
+        const s = (abs % 60).toString().padStart(2, '0');
+        els.timer.innerText = `${neg ? '-' : ''}${m}:${s}`;
+    }
+
+    // ---- Rest-time set edit chip (stepper-based) ----
+    // Copy a set's actual values forward to every later set in the same exercise,
+    // so the *previous rep's* numbers become the default going forward (not the routine's).
+    function propagateForward(exIdx, fromSetIdx) {
+        const rec = sessionLog[exIdx];
+        if (!rec || !rec.sets) return;
+        const src = rec.sets[fromSetIdx];
+        for (let i = fromSetIdx + 1; i < rec.sets.length; i++) {
+            rec.sets[i].weight = src.weight;
+            rec.sets[i].reps = src.reps;
+        }
+    }
+    function renderSetEditValues() {
+        const rec = sessionLog[lastCompleted.exIdx];
+        const setObj = rec.sets[lastCompleted.setIdx];
+        els.setWeight.innerText = fmtNum(setObj.weight);
+        els.setWeightUnit.innerText = suffixOf(rec.load_type);
+        els.setReps.innerText = fmtNum(setObj.reps);
+    }
+    function showSetEdit() {
+        if (!lastCompleted || lastCompleted.type !== 'rep') { hideSetEdit(); return; }
+        const rec = sessionLog[lastCompleted.exIdx];
+        if (!rec || !rec.sets) { hideSetEdit(); return; }
+        els.setEditTitle.innerText = `✓ ${rec.name.split(':')[0]} · ${lastCompleted.setIdx + 1}세트`;
+        renderSetEditValues();
+
+        // Previous-session reference for this exercise, highlighting the matching set index
+        const prev = findLastSession(rec.name);
+        if (prev && prev.rec.type === 'rep' && prev.rec.sets) {
+            const s = suffixOf(prev.rec.load_type);
+            const when = prev.log.session_date || prev.log.date || '';
+            const cells = prev.rec.sets.map((x, i) => {
+                const txt = `${fmtNum(x.weight)}${s}×${x.reps}`;
+                return i === lastCompleted.setIdx ? `<span class="cur">${txt}</span>` : txt;
+            }).join(',  ');
+            els.setPrev.innerHTML = `<b>이전${when ? ' ' + when : ''}:</b> ${cells}`;
+            els.setPrev.style.display = 'block';
+        } else {
+            els.setPrev.innerHTML = '';
+            els.setPrev.style.display = 'none';
+        }
+        els.setEdit.classList.add('show');
+    }
+    function hideSetEdit() { els.setEdit.classList.remove('show'); }
+
+    window.stepWeight = function(delta) {
+        if (!lastCompleted || lastCompleted.type !== 'rep') return;
+        const rec = sessionLog[lastCompleted.exIdx];
+        const setObj = rec.sets[lastCompleted.setIdx];
+        let w = Math.round((num(setObj.weight) + delta) * 2) / 2; // snap to 0.5
+        if (w < 0) w = 0;
+        setObj.weight = w;
+        propagateForward(lastCompleted.exIdx, lastCompleted.setIdx);
+        renderSetEditValues();
+    };
+    window.stepReps = function(delta) {
+        if (!lastCompleted || lastCompleted.type !== 'rep') return;
+        const rec = sessionLog[lastCompleted.exIdx];
+        const setObj = rec.sets[lastCompleted.setIdx];
+        let r = Math.round(num(setObj.reps) + delta);
+        if (r < 0) r = 0;
+        setObj.reps = r;
+        propagateForward(lastCompleted.exIdx, lastCompleted.setIdx);
+        renderSetEditValues();
+    };
+
+    function finishWorkout() {
+        state = 'FINISH';
+        clearInterval(timerInterval); clearInterval(totalTimerInterval);
+        hideSetEdit();
+        els.title.innerText = "Workout Complete!";
+        els.desc.innerText = `Total Time: ${els.totalTime.innerText}`;
+        els.mainBtn.innerText = "FINISH";
+        els.mainBtn.style.background = "var(--primary)";
+        els.mainBtn.style.color = "black";
+        els.statusCard.classList.remove('work-mode', 'rest-mode');
+        els.statusInd.innerText = "DONE";
+        renderTimeline();
+        openReview();
+    }
+
+    // ================= Review sheet & Export =================
+    function currentMeta() {
+        return {
+            routine_key: programs[els.progSelect.value].routine_key || sanitizeKey(programs[els.progSelect.value].title),
+            duration_min: Math.max(1, Math.round(totalSeconds / 60))
+        };
+    }
+
+    function openReview() {
+        const meta = currentMeta();
+        document.getElementById('revRoutine').value = meta.routine_key;
+        document.getElementById('revDate').value = todayISO();
+        document.getElementById('revDuration').value = meta.duration_min;
+        document.getElementById('revSessionNote').value = '';
+        sessionTags = [];
+        document.getElementById('tagInjury').classList.remove('on');
+        document.getElementById('tagCondition').classList.remove('on');
+        renderReviewExercises();
+        rebuildExport();
+        document.getElementById('reviewModal').classList.add('open');
+    }
+    function closeReview() {
+        saveHistoryLog();
+        document.getElementById('reviewModal').classList.remove('open');
+    }
+
+    function renderReviewExercises() {
+        const area = document.getElementById('reviewExArea');
+        area.innerHTML = "";
+        sessionLog.forEach((rec, ei) => {
+            const div = document.createElement('div');
+            div.className = 'rev-ex';
+            let setsHtml = '';
+            if (rec.type === 'time') {
+                setsHtml = `<div style="color:var(--text-secondary); font-size:0.85rem;">TIME · ${rec.reps_label} · ${rec.setCount} set</div>`;
+            } else {
+                setsHtml = '<div class="set-grid">';
+                rec.sets.forEach((s, si) => {
+                    setsHtml += `
+                        <div class="set-cell">
+                            <span class="si">${si + 1}</span>
+                            <input type="number" step="any" inputmode="decimal" value="${s.weight}" onchange="editReviewSet(${ei},${si},'weight',this.value)">
+                            <span class="x">×</span>
+                            <input type="number" inputmode="numeric" value="${s.reps}" onchange="editReviewSet(${ei},${si},'reps',this.value)">
+                        </div>`;
+                });
+                setsHtml += '</div>';
+            }
+            div.innerHTML = `
+                <div class="rev-ex-head">
+                    <span class="rev-ex-name">${rec.name}</span>
+                    <span class="rev-ex-token" id="revtok-${ei}"></span>
+                </div>
+                ${setsHtml}
+                <input type="text" placeholder="주관노트" value="${rec.note || ''}" onchange="editReviewNote(${ei}, this.value)">
+            `;
+            area.appendChild(div);
+        });
+        updateReviewTokens();
+    }
+    window.editReviewSet = function(ei, si, field, val) {
+        sessionLog[ei].sets[si][field] = num(val);
+        updateReviewTokens();
+        rebuildExport();
+    };
+    window.editReviewNote = function(ei, val) { sessionLog[ei].note = val; rebuildExport(); };
+
+    function updateReviewTokens() {
+        sessionLog.forEach((rec, ei) => {
+            const span = document.getElementById(`revtok-${ei}`);
+            if (!span) return;
+            if (rec.type === 'time') { span.innerText = `BW · ${rec.reps_label}`; return; }
+            const w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight));
+            const r = fmtRepsTokens(rec.sets.map(s => s.reps));
+            span.innerText = `${w} · ${r}`;
+        });
+    }
+
+    window.toggleTag = function(tag) {
+        const idx = sessionTags.indexOf(tag);
+        const btn = document.getElementById(tag === 'injury' ? 'tagInjury' : 'tagCondition');
+        if (idx >= 0) { sessionTags.splice(idx, 1); btn.classList.remove('on'); }
+        else { sessionTags.push(tag); btn.classList.add('on'); }
+        rebuildExport();
+    };
+
+    // Single source of truth for P1 export text — works for the live review sheet and saved logs
+    function buildExportFromLog(log) {
+        const date = log.session_date || '';
+        let t = `Weight ${date}\n`;
+        t += `routine: ${log.routine_key || ''}\n`;
+        if (log.routine_rev) t += `routine_rev: ${log.routine_rev}\n`;
+        t += `session_date: ${date}\n`;
+        t += `duration_min: ${log.duration_min}\n`;
+        t += `tags: ${(log.tags || []).join(', ')}\n\n`;
+        t += `| 종목 | 무게 | 횟수 | 세트 | 주관노트 |\n|---|---|---|---|---|\n`;
+        (log.sessionLog || []).forEach(rec => {
+            let w, r, setCount, cellNote = (rec.note || '').replace(/\|/g, '/');
+            if (rec.type === 'time') {
+                w = 'BW'; r = rec.reps_label; setCount = rec.setCount;
+            } else {
+                w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight));
+                r = fmtRepsTokens(rec.sets.map(s => s.reps));
+                setCount = rec.sets.length;
+            }
+            t += `| ${rec.name} | ${w} | ${r} | ${setCount} | ${cellNote} |\n`;
+        });
+        if (log.session_note) t += `\n주관: ${log.session_note}\n`;
+        return t;
+    }
+    function currentReviewLog() {
+        return {
+            session_date: document.getElementById('revDate').value || todayISO(),
+            routine_key: document.getElementById('revRoutine').value.trim(),
+            routine_rev: programs[els.progSelect.value] ? revOf(programs[els.progSelect.value]) : '',
+            duration_min: document.getElementById('revDuration').value,
+            tags: [...sessionTags],
+            session_note: document.getElementById('revSessionNote').value.trim(),
+            sessionLog: sessionLog
+        };
+    }
+    function buildExportText() { return buildExportFromLog(currentReviewLog()); }
+
+    function rebuildExport() {
+        updateReviewTokens();
+        document.getElementById('exportPreview').value = buildExportText();
+    }
+
+    function copyExport() {
+        const text = buildExportText();
+        navigator.clipboard.writeText(text).then(() => {
+            alert("복사 완료! P1 Debriefing 세션에 붙여넣으세요.");
+        }).catch(() => {
+            const ta = document.getElementById('exportPreview');
+            ta.removeAttribute('readonly'); ta.select();
+            document.execCommand('copy'); ta.setAttribute('readonly', 'true');
+            alert("복사 완료!");
+        });
+    }
+
+    // ================= History =================
+    function saveHistoryLog() {
+        const history = JSON.parse(localStorage.getItem('workout_logs_v10') || "[]");
+        const log = {
+            date: new Date().toLocaleString('ko-KR'),
+            session_date: document.getElementById('revDate').value || todayISO(),
+            routine_key: document.getElementById('revRoutine').value.trim(),
+            routine_title: programs[els.progSelect.value] ? programs[els.progSelect.value].title : '',
+            duration_min: document.getElementById('revDuration').value,
+            tags: [...sessionTags],
+            session_note: document.getElementById('revSessionNote').value.trim(),
+            sessionLog: JSON.parse(JSON.stringify(sessionLog))
+        };
+        // v11: tie the session to the exact routine version it was run with
+        const prog = programs[els.progSelect.value];
+        if (prog) {
+            recordRoutineVersions('session');
+            log.routine_rev = revOf(prog);
+            log.plan = planOf(prog, false);
+        }
+        log.app_version = APP_VERSION;
+        log.exportText = buildExportFromLog(log);
+        history.unshift(log);
+        localStorage.setItem('workout_logs_v10', JSON.stringify(history));
+        enqueue(sessionPath(log), log, `session ${log.session_date} ${log.routine_key}`, false);
+        enqueueBackup();
+        flushQueue(false);
+    }
+
+    function openHistory() {
+        const history = JSON.parse(localStorage.getItem('workout_logs_v10') || "[]");
+        els.historyArea.innerHTML = "";
+        if (history.length === 0) {
+            els.historyArea.innerHTML = "<div class='empty-history'>No workout history yet.</div>";
+        } else {
+            history.forEach((log, i) => {
+                const div = document.createElement('div');
+                div.className = "history-card";
+                let details = "";
+                (log.sessionLog || []).forEach(rec => {
+                    let w, r;
+                    if (rec.type === 'time') { w = 'BW'; r = rec.reps_label; }
+                    else { w = fmtWeightTokens(rec.load_type, rec.sets.map(s => s.weight)); r = fmtRepsTokens(rec.sets.map(s => s.reps)); }
+                    details += `• ${rec.name}: ${w} / ${r}<br>`;
+                });
+                div.innerHTML = `
+                    <div class="h-date">${log.session_date || log.date}</div>
+                    <div class="h-title">${log.routine_key} · ${log.duration_min}min ${log.tags && log.tags.length ? '· ' + log.tags.join(',') : ''}</div>
+                    <div class="h-list">${details}</div>
+                    <button class="btn-sub" style="width:100%; margin-top:10px; height:40px;" onclick="copyHistory(${i})">📋 Copy for P1</button>
+                `;
+                els.historyArea.appendChild(div);
+            });
+        }
+        document.getElementById('historyModal').classList.add('open');
+    }
+    window.copyHistory = function(i) {
+        const history = JSON.parse(localStorage.getItem('workout_logs_v10') || "[]");
+        const log = history[i];
+        const text = log ? (log.exportText || buildExportFromLog(log)) : '';
+        navigator.clipboard.writeText(text).then(() => alert("복사 완료!"));
+    };
+    function closeHistory() { document.getElementById('historyModal').classList.remove('open'); }
+    function clearHistory() {
+        if (confirm("Delete all history logs?")) {
+            localStorage.removeItem('workout_logs_v10');
+            openHistory();
+        }
+    }
+
+    // ================= Routine editor =================
+    function openSettings() {
+        document.getElementById('settingsModal').classList.add('open');
+        renderProgramSelect();
+        const val = document.getElementById('editProgramSelect').value;
+        loadEditor(val);
+        renderRoutineHistory();
+        fillSyncForm();
+    }
+    function closeSettings() {
+        document.getElementById('settingsModal').classList.remove('open');
+        saveData();
+        recordRoutineVersions('edit');
+        flushQueue(false);
+        loadMainProgram();
+    }
+    // Close without saving: discard in-memory edits by reloading from storage
+    function cancelSettings() {
+        const sel = els.progSelect.value;
+        document.getElementById('settingsModal').classList.remove('open');
+        loadData();               // revert `programs` to last saved state
+        renderProgramSelect();
+        if (programs[sel]) els.progSelect.value = sel;
+        loadMainProgram();
+    }
+    function updateProgramMeta(field, value) {
+        const key = document.getElementById('editProgramSelect').value;
+        if (!programs[key]) return;
+        programs[key][field] = value;
+        if (field === 'title') renderProgramSelect();
+    }
+    function addProgram() {
+        const name = document.getElementById('newProgramName').value;
+        if (!name) return alert('Name required');
+        const id = 'prog_' + Date.now();
+        programs[id] = { title: name, routine_key: sanitizeKey(name), list: [] };
+        document.getElementById('newProgramName').value = '';
+        renderProgramSelect();
+        document.getElementById('editProgramSelect').value = id;
+        loadEditor(id);
+    }
+    function deleteProgram() {
+        const key = document.getElementById('editProgramSelect').value;
+        if (Object.keys(programs).length <= 1) return alert('Cannot delete last program');
+        delete programs[key];
+        renderProgramSelect();
+        loadEditor(document.getElementById('editProgramSelect').value);
+    }
+    function loadEditor(key) {
+        if (!key || !programs[key]) return;
+        document.getElementById('editTitle').value = programs[key].title || '';
+        document.getElementById('editRoutineKey').value = programs[key].routine_key || '';
+        const list = programs[key].list;
+        const area = document.getElementById('exerciseListArea');
+        area.innerHTML = "";
+        list.forEach((ex, idx) => {
+            const div = document.createElement('div');
+            div.className = 'ex-item';
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span style="font-weight:bold;">#${idx + 1}</span>
+                    <button class="btn-sub" style="background:var(--danger); color:white; padding:4px 10px; height:auto;" onclick="removeEx('${key}', ${idx})">Del</button>
+                </div>
+                <div class="editor-row"><input value="${ex.name}" onchange="updateEx('${key}', ${idx}, 'name', this.value)" placeholder="Name"></div>
+
+                <div class="editor-row" style="display:grid; grid-template-columns: 1.2fr 1fr 1.4fr; gap:10px;">
+                    <select onchange="updateEx('${key}', ${idx}, 'load_type', this.value)">
+                        <option value="each" ${ex.load_type === 'each' ? 'selected' : ''}>each (e)</option>
+                        <option value="single" ${ex.load_type === 'single' ? 'selected' : ''}>single (t)</option>
+                        <option value="bodyweight" ${ex.load_type === 'bodyweight' ? 'selected' : ''}>BW</option>
+                    </select>
+                    <input type="number" step="any" value="${ex.weight}" onchange="updateEx('${key}', ${idx}, 'weight', this.value)" placeholder="Weight" style="color:var(--work); font-weight:bold;">
+                    <input value="${ex.youtubeId}" onchange="updateEx('${key}', ${idx}, 'youtubeId', this.value)" placeholder="YouTube ID">
+                </div>
+
+                <div class="editor-row"><textarea onchange="updateEx('${key}', ${idx}, 'desc', this.value)" style="height:50px;">${ex.desc}</textarea></div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <input type="number" value="${ex.sets}" onchange="updateEx('${key}', ${idx}, 'sets', this.value)" placeholder="Sets">
+                    <input value="${ex.reps}" onchange="updateEx('${key}', ${idx}, 'reps', this.value)" placeholder="Reps">
+                    <input type="number" value="${ex.rest}" onchange="updateEx('${key}', ${idx}, 'rest', this.value)" placeholder="Rest(sec)">
+                    <select onchange="updateEx('${key}', ${idx}, 'type', this.value)">
+                        <option value="rep" ${ex.type === 'rep' ? 'selected' : ''}>Reps</option>
+                        <option value="time" ${ex.type === 'time' ? 'selected' : ''}>Time</option>
+                    </select>
+                </div>
+            `;
+            area.appendChild(div);
+        });
+    }
+    window.removeEx = function(key, idx) { programs[key].list.splice(idx, 1); loadEditor(key); };
+    window.updateEx = function(key, idx, field, val) {
+        if (field === 'sets' || field === 'rest') val = parseInt(val) || 0;
+        else if (field === 'weight') val = num(val);
+        else if (field === 'reps') { const ex = programs[key].list[idx]; if (ex.type !== 'time') val = num(val); }
+        programs[key].list[idx][field] = val;
+    };
+    window.addExercise = function() {
+        const key = document.getElementById('editProgramSelect').value;
+        programs[key].list.push({ name: "New Exercise", load_type: "each", weight: 10, desc: "", youtubeId: "", sets: 3, reps: 10, rest: 60, type: "rep" });
+        loadEditor(key);
+    };
+
+    // ---- Routine JSON import / export ----
+    function exportRoutine() {
+        const key = document.getElementById('editProgramSelect').value;
+        const json = JSON.stringify(programs[key], null, 2);
+        document.getElementById('routineIO').value = json;
+        navigator.clipboard.writeText(json).then(() => alert("현재 루틴 JSON 복사 완료.")).catch(() => {});
+    }
+    function importRoutine() {
+        const raw = document.getElementById('routineIO').value.trim();
+        if (!raw) return alert("붙여넣은 JSON이 없습니다.");
+        let obj;
+        try { obj = JSON.parse(raw); } catch (e) { return alert("JSON 파싱 실패: " + e.message); }
+        if (!obj.title || !Array.isArray(obj.list)) return alert("형식 오류: title / list 필드가 필요합니다.");
+        if (!obj.routine_key) obj.routine_key = sanitizeKey(obj.title);
+        obj.list = obj.list.map(normalizeImportedEx);
+        const id = 'prog_' + Date.now();
+        programs[id] = obj;
+        renderProgramSelect();
+        document.getElementById('editProgramSelect').value = id;
+        loadEditor(id);
+        alert(`'${obj.title}' 루틴을 반영했습니다.`);
+    }
+    function normalizeImportedEx(ex) {
+        const isTime = ex.type === 'time';
+        return {
+            name: ex.name || 'Exercise',
+            load_type: ['each', 'single', 'bodyweight'].includes(ex.load_type) ? ex.load_type : 'each',
+            weight: num(ex.weight),
+            desc: ex.desc || '',
+            youtubeId: ex.youtubeId || '',
+            sets: parseInt(ex.sets) || 3,
+            reps: isTime ? ex.reps : num(ex.reps),
+            rest: parseInt(ex.rest) || 60,
+            type: isTime ? 'time' : 'rep'
+        };
+    }
+
+    // ---- v9 → v10 on-demand import (same-origin localStorage path) ----
+    function importV9Storage() {
+        const p = localStorage.getItem('workout_programs_v9');
+        const l = localStorage.getItem('workout_logs_v9');
+        if (!p && !l) {
+            return alert("이 앱에서 v9 데이터를 찾지 못했습니다.\n(Koder가 파일별로 저장소를 분리했을 수 있어요 — v9 파일에서 '전체 백업 복사' 후 여기에 붙여넣어 '백업 복원'을 쓰세요. v9에 백업 버튼이 없으면 추가해 드릴게요.)");
+        }
+        if (p) { Object.assign(programs, migrateV9(JSON.parse(p))); saveData(); }
+        if (l) {
+            const cur = JSON.parse(localStorage.getItem('workout_logs_v10') || '[]');
+            const conv = JSON.parse(l).map(convertV9Log);
+            localStorage.setItem('workout_logs_v10', JSON.stringify(conv.concat(cur)));
+        }
+        renderProgramSelect();
+        loadEditor(document.getElementById('editProgramSelect').value);
+        alert("v9 데이터를 가져왔습니다. (루틴/큐잉/영상 + 기록)");
+    }
+
+    // ---- Full backup / restore (cross-file bridge via clipboard) ----
+    function backupAll() {
+        const json = JSON.stringify(backupDump());
+        document.getElementById('routineIO').value = json;
+        navigator.clipboard.writeText(json).then(() => alert("전체 백업(루틴+기록) JSON 복사 완료.")).catch(() => alert("아래 칸에 백업 JSON을 넣었습니다. 길게 눌러 복사하세요."));
+    }
+    function restoreAll() {
+        const raw = document.getElementById('routineIO').value.trim();
+        if (!raw) return alert("붙여넣은 JSON이 없습니다.");
+        let dump; try { dump = JSON.parse(raw); } catch (e) { return alert("JSON 파싱 실패: " + e.message); }
+        if (dump.title && Array.isArray(dump.list)) return importRoutine(); // single routine shape
+        if (!dump.programs) return alert("형식 오류: programs 필드가 없습니다. (단일 루틴이면 '붙여넣기로 반영'을 쓰세요)");
+        if (!confirm("현재 루틴/기록을 백업 내용으로 대체합니다. 지금 루틴은 '루틴 변경 이력'에 남습니다. 진행할까요?")) return;
+        recordRoutineVersions('before-restore');
+        if (Array.isArray(dump.routine_history)) {
+            // Merge, never drop: keep every version from both sides.
+            const hist = loadRoutineHistory();
+            const have = new Set(hist.map(h => `${h.program_id}|${h.rev}|${h.saved_at}`));
+            dump.routine_history.forEach(h => { if (!have.has(`${h.program_id}|${h.rev}|${h.saved_at}`)) hist.push(h); });
+            hist.sort((a, b) => a.saved_at.localeCompare(b.saved_at));
+            writeJSON(LS.rhist, hist);
+        }
+        if (dump.v === 'workout_v9') {
+            // v9 백업 덤프 → v10 스키마로 마이그레이션
+            programs = migrateV9(dump.programs);
+            saveData();
+            localStorage.setItem('workout_logs_v10', JSON.stringify((dump.logs || []).map(convertV9Log)));
+        } else {
+            programs = dump.programs;
+            saveData();
+            if (Array.isArray(dump.logs)) localStorage.setItem('workout_logs_v10', JSON.stringify(dump.logs));
+        }
+        renderProgramSelect();
+        loadMainProgram();
+        recordRoutineVersions('restore');
+        flushQueue(false);
+        alert("복원 완료. (루틴/큐잉/영상 + 기록)\n처음 옮겨 온 경우 설정의 '전체 기록·루틴 올리기'를 한 번 누르세요.");
+    }
+</script>
+</body>
+</html>
